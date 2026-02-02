@@ -175,7 +175,8 @@ export const eventService = {
   markAttendance: async (
     manager: Pick<User, "email" | "role">,
     eventId: string,
-    studentIdentifier: string
+    studentIdentifier: string,
+    status: boolean = true
   ): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE_URL}/events/${encodeURIComponent(eventId)}/attendance`, {
       method: "POST",
@@ -184,12 +185,13 @@ export const eventService = {
         managerEmail: manager.email,
         role: manager.role,
         studentIdentifier,
+        status,
       }),
     });
 
     if (res.ok) {
       const data = await res.json().catch(() => null);
-      return (data || { success: true, message: "Attendance marked" }) as any;
+      return (data || { success: true, message: "Attendance updated" }) as any;
     }
 
     return { success: false, message: await parseApiError(res) };

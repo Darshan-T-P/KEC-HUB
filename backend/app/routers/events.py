@@ -341,14 +341,17 @@ async def mark_event_attendance(event_id: str, payload: EventAttendanceMarkReque
     if not reg:
         return ApiResponse(success=False, message=f"Student {student_email} is not registered for this event.")
 
-    if reg.get("isPresent"):
-        return ApiResponse(success=True, message=f"Attendance already marked for {student_email}.")
+    current_status = bool(reg.get("isPresent", False))
+    if current_status == payload.status:
+        msg = f"Attendance is already marked as {'present' if current_status else 'absent'} for {student_email}."
+        return ApiResponse(success=True, message=msg)
 
-    ok = await event_regs.mark_attendance(event_oid, student_email)
+    ok = await event_regs.mark_attendance(event_oid, student_email, payload.status)
     if ok:
-        return ApiResponse(success=True, message=f"Attendance marked for {student_email}.")
+        target = "present" if payload.status else "absent"
+        return ApiResponse(success=True, message=f"Attendance marked as {target} for {student_email}.")
     else:
-        return ApiResponse(success=False, message="Failed to mark attendance.")
+        return ApiResponse(success=False, message="Failed to update attendance.")
 
 @router.get("/{event_id}/attendance/report")
 async def download_attendance_report(event_id: str, email: str, role: UserRole = "event_manager", event_repo=Depends(get_event_repo), event_regs=Depends(get_event_reg_repo), user_repo=Depends(get_user_repo)):

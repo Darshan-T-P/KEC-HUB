@@ -236,12 +236,19 @@ class EventRegistrationRepository:
         cur = self.col.find({"studentEmail": student_email}, sort=[("createdAt", -1)]).limit(int(limit))
         return [d async for d in cur]
 
-    async def mark_attendance(self, event_id: ObjectId, student_email: str) -> bool:
+    async def mark_attendance(self, event_id: ObjectId, student_email: str, status: bool = True) -> bool:
+        update_doc = {"isPresent": status}
+        if status:
+            update_doc["attendedAt"] = utc_now()
+        else:
+            update_doc["attendedAt"] = None
+
         res = await self.col.update_one(
             {"eventId": event_id, "studentEmail": student_email},
-            {"$set": {"isPresent": True, "attendedAt": utc_now()}}
+            {"$set": update_doc}
         )
-        return bool(res.modified_count)
+        # Even if not modified (already matches), we check if matched_count > 0 or modified_count
+        return bool(res.matched_count)
 
 
 class ReferralRepository:

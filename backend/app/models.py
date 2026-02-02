@@ -517,6 +517,7 @@ class EventAttendanceMarkRequest(BaseModel):
     managerEmail: EmailStr
     role: UserRole = "event_manager"
     studentIdentifier: str # email or roll number
+    status: bool = True
 
 
 class EventRegistrationsResponse(ApiResponse):

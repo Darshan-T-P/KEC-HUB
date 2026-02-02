@@ -68,6 +68,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
   const [scannerActive, setScannerActive] = useState(false);
   const [manualRoll, setManualRoll] = useState("");
   const [markingAtt, setMarkingAtt] = useState(false);
+  const [confirming, setConfirming] = useState<{ id: string, status: boolean } | null>(null);
 
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
@@ -84,33 +85,43 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
   }, [user.email]);
 
   useEffect(() => {
-    if (modalTab === "attendance" && scannerActive && !scannerRef.current) {
-      const scanner = new Html5QrcodeScanner(
-        "qr-reader",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false
-      );
+    let scanner: any = null;
 
-      scanner.render(
-        async (decodedText) => {
-          setScannerActive(false);
-          scanner.clear();
-          scannerRef.current = null;
-          await handleMarkAttendance(decodedText);
-        },
-        (err) => {
-          // ignore scan errors
+    if (modalTab === "attendance" && scannerActive) {
+      const timer = setTimeout(async () => {
+        const element = document.getElementById("qr-reader");
+        if (element && !scannerRef.current) {
+          try {
+            const { Html5Qrcode } = await import("html5-qrcode");
+            scanner = new Html5Qrcode("qr-reader");
+            scannerRef.current = scanner;
+
+            await scanner.start(
+              { facingMode: "environment" },
+              { fps: 10, qrbox: { width: 300, height: 150 } }, // Barcode friendly
+              async (decodedText: string) => {
+                setManualRoll(decodedText.trim());
+                setScannerActive(false); // Stop to allow confirmation
+              },
+              () => { }
+            );
+          } catch (err) {
+            console.error("Scanner error:", err);
+            setError("Could not start camera.");
+            setScannerActive(false);
+          }
         }
-      );
-      scannerRef.current = scanner;
-    }
+      }, 300);
 
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear();
-        scannerRef.current = null;
-      }
-    };
+      return () => {
+        clearTimeout(timer);
+        if (scannerRef.current) {
+          scannerRef.current.stop().then(() => {
+            scannerRef.current = null;
+          }).catch(() => { });
+        }
+      };
+    }
   }, [modalTab, scannerActive]);
 
   const visibleAllowedDepts = useMemo(() => (allDepts ? [] : allowedDepartments), [allDepts, allowedDepartments]);
@@ -256,19 +267,22 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
     setLoadingRegs(false);
   };
 
-  const handleMarkAttendance = async (id: string) => {
+  const handleMarkAttendance = async (id: string, status: boolean = true) => {
     if (!regsEvent || !id.trim()) return;
     setMarkingAtt(true);
-    const res = await eventService.markAttendance(user, regsEvent.id, id.trim());
+    const res = await eventService.markAttendance(user, regsEvent.id, id.trim(), status);
     setMarkingAtt(false);
+    setConfirming(null);
     if (res.success) {
       setToast(res.message);
+      setError(null);
       setManualRoll("");
       // refresh registrations list
       const list = await eventService.listRegistrations(user, regsEvent.id);
       setRegistrations(list);
     } else {
       setError(res.message);
+      setToast(null);
     }
   };
 
@@ -710,9 +724,12 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                               </p>
                             </div>
                           </div>
-                          <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${r.isPresent ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-white text-slate-400 border-slate-100"}`}>
+                          <button
+                            onClick={() => setConfirming({ id: r.studentEmail, status: !r.isPresent })}
+                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border transition-all ${r.isPresent ? "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100" : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"}`}
+                          >
                             {r.isPresent ? "Present" : "Absent"}
-                          </span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -725,19 +742,19 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                   <div className="space-y-6">
                     <div>
                       <h4 className="font-black text-slate-800">Quick Scan</h4>
-                      <p className="text-xs font-bold text-slate-500 mt-1">Scan student ticket QR code to mark present.</p>
+                      <p className="text-xs font-bold text-slate-500 mt-1">Scan student ticket or ID barcode.</p>
 
                       {scannerActive ? (
-                        <div className="mt-4 rounded-[2rem] overflow-hidden border-2 border-indigo-600 bg-black aspect-square">
+                        <div className="mt-4 rounded-[2rem] overflow-hidden border-2 border-indigo-600 bg-black aspect-[16/9] flex items-center justify-center">
                           <div id="qr-reader" className="w-full"></div>
                         </div>
                       ) : (
                         <button
                           onClick={() => setScannerActive(true)}
-                          className="mt-4 w-full aspect-square bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-4 hover:bg-slate-100 transition-all border-indigo-200 bg-indigo-50/30"
+                          className="mt-4 w-full aspect-[16/9] bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-4 hover:bg-slate-100 transition-all border-indigo-200 bg-indigo-50/30"
                         >
                           <span className="text-4xl">📷</span>
-                          <span className="font-black text-indigo-600 text-sm">Start Camera Scanner</span>
+                          <span className="font-black text-indigo-600 text-sm">Start Scanner (QR/Barcode)</span>
                         </button>
                       )}
 
@@ -762,13 +779,13 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                         value={manualRoll}
                         placeholder="e.g. 21CSR001"
                         onChange={(e) => setManualRoll(e.target.value)}
-                        className="mt-2 w-full p-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold uppercase"
+                        className="mt-2 w-full p-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold uppercase transition-all"
                       />
                     </div>
 
                     <button
                       disabled={markingAtt || !manualRoll.trim()}
-                      onClick={() => handleMarkAttendance(manualRoll)}
+                      onClick={() => setConfirming({ id: manualRoll, status: true })}
                       className="mt-6 w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-60"
                     >
                       {markingAtt ? "Processing…" : "Mark as Present"}
@@ -777,11 +794,42 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                     <div className="mt-8 pt-8 border-t border-slate-200">
                       <h5 className="font-black text-slate-400 text-[10px] uppercase tracking-widest mb-4">Tips</h5>
                       <ul className="text-xs font-bold text-slate-500 space-y-2">
-                        <li className="flex gap-2"><span>•</span> <span>QR scanning is faster for large events.</span></li>
+                        <li className="flex gap-2"><span>•</span> <span>Scanning works for both QR codes and barcodes.</span></li>
                         <li className="flex gap-2"><span>•</span> <span>You can download the full attendance list at any time.</span></li>
-                        <li className="flex gap-2"><span>•</span> <span>Only registered students can be marked present.</span></li>
+                        <li className="flex gap-2"><span>•</span> <span>Status cards allow toggling present/absent state.</span></li>
                       </ul>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Confirmation Overlay */}
+            {confirming && (
+              <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex items-center justify-center p-8 rounded-[2.5rem] animate-in fade-in zoom-in-95 duration-200">
+                <div className="text-center max-w-sm">
+                  <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6 ${confirming.status ? "bg-indigo-100 text-indigo-600" : "bg-rose-100 text-rose-600"}`}>
+                    {confirming.status ? "📋" : "⚠️"}
+                  </div>
+                  <h4 className="text-2xl font-black text-slate-800">Confirm Action</h4>
+                  <p className="mt-3 text-slate-500 font-bold leading-relaxed">
+                    Do you want to mark <span className="text-slate-900 font-black">{confirming.id}</span> as <span className={confirming.status ? "text-indigo-600" : "text-rose-600"}>{confirming.status ? "PRESENT" : "ABSENT"}</span>?
+                  </p>
+
+                  <div className="mt-8 grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setConfirming(null)}
+                      className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      disabled={markingAtt}
+                      onClick={() => handleMarkAttendance(confirming.id, confirming.status)}
+                      className={`py-4 text-white rounded-2xl font-black text-sm shadow-lg transition-all ${confirming.status ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100" : "bg-rose-600 hover:bg-rose-700 shadow-rose-100"}`}
+                    >
+                      {markingAtt ? "..." : "Confirm"}
+                    </button>
                   </div>
                 </div>
               </div>
