@@ -28,8 +28,6 @@ export interface Opportunity {
   requirements: string[];
   sourceUrl?: string;
   groundingChunks?: GroundingChunk[];
-  score?: number;
-  reasons?: string[];
 }
 
 export interface CrawlMeta {

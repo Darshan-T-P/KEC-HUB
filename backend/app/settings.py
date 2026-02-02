@@ -7,20 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
-_ROOT_DIR = _BACKEND_DIR.parent
-_ENV_FILES = [
-    _BACKEND_DIR / ".env",
-    _ROOT_DIR / ".env"
-]
+_ENV_FILE = _BACKEND_DIR / ".env"
 
 
 class Settings(BaseSettings):
-    # Load .env from backend/ or project root.
-    model_config = SettingsConfigDict(
-        env_file=[str(f) for f in _ENV_FILES], 
-        env_file_encoding="utf-8", 
-        extra="ignore"
-    )
+    # Load backend/.env no matter where uvicorn is launched from.
+    model_config = SettingsConfigDict(env_file=str(_ENV_FILE), env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "development"
     app_host: str = "0.0.0.0"

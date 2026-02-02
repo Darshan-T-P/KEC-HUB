@@ -457,3 +457,32 @@ class ChatMessageRepository:
     async def list_by_thread(self, thread_id: str, limit: int = 200) -> list[Dict[str, Any]]:
         cur = self.col.find({"threadId": thread_id}, sort=[("createdAt", 1)]).limit(int(limit))
         return [d async for d in cur]
+
+
+class PlacementExperienceRepository:
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.col = db["placement_experiences"]
+
+    async def ensure_indexes(self) -> None:
+        await self.col.create_index("companyName")
+        await self.col.create_index("studentEmail")
+        await self.col.create_index([("createdAt", -1)])
+
+    async def create(self, doc: Dict[str, Any]) -> str:
+        res = await self.col.insert_one(doc)
+        return str(res.inserted_id)
+
+    async def list_by_company(self, company_name: str, limit: int = 100) -> list[Dict[str, Any]]:
+        # Case-insensitive search
+        import re
+        pattern = re.compile(f"^{re.escape(company_name)}$", re.IGNORECASE)
+        cur = self.col.find({"companyName": pattern}).sort("createdAt", -1).limit(int(limit))
+        return [d async for d in cur]
+
+    async def list_all(self, limit: int = 100) -> list[Dict[str, Any]]:
+        cur = self.col.find({}).sort("createdAt", -1).limit(int(limit))
+        return [d async for d in cur]
+
+    async def list_by_student(self, student_email: str, limit: int = 50) -> list[Dict[str, Any]]:
+        cur = self.col.find({"studentEmail": student_email}).sort("createdAt", -1).limit(int(limit))
+        return [d async for d in cur]

@@ -112,45 +112,10 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
   };
 
   const saveProfile = async () => {
+    setSaving(true);
     setMessage(null);
     setError(null);
 
-    // Validations
-    if (form.name && form.name.trim().length < 3) {
-      setError('Name must be at least 3 characters long');
-      return;
-    }
-
-    if ((profile as any).role === 'student') {
-      const roll = (form as any).roll_number;
-      if (roll && !/^[0-9]{2}[A-Z]{2,3}[0-9]{3}$/.test(roll)) {
-        setError('Invalid Roll Number format (e.g., 21CSR001)');
-        return;
-      }
-    }
-
-    const phone = (form as any).phone_number;
-    if (phone && !/^\d{10}$/.test(phone.replace(/\D/g, ''))) {
-      setError('Phone number must be 10 digits');
-      return;
-    }
-
-    if (form.cgpa !== undefined && (form.cgpa < 0 || form.cgpa > 10)) {
-      setError('CGPA must be between 0 and 10');
-      return;
-    }
-
-    if (form.linkedin_url && !form.linkedin_url.includes('linkedin.com')) {
-      setError('Invalid LinkedIn URL');
-      return;
-    }
-
-    if (form.github_url && !form.github_url.includes('github.com')) {
-      setError('Invalid GitHub URL');
-      return;
-    }
-
-    setSaving(true);
     const payload: ProfileUpdate = {
       ...form,
       projects,

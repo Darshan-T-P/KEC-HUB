@@ -108,48 +108,6 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
     setError(null);
     setSuccessMsg(null);
 
-    // Validations
-    if (companyName.trim().length < 2) {
-      setError("Company Name must be at least 2 characters long");
-      return;
-    }
-    if (title.trim().length < 3) {
-      setError("Position Title must be at least 3 characters long");
-      return;
-    }
-    if (description.trim().length < 10) {
-      setError("Description must be at least 10 characters long");
-      return;
-    }
-
-    if (minCgpa.trim()) {
-      const cgpaVal = Number(minCgpa);
-      if (Number.isNaN(cgpaVal) || cgpaVal < 0 || cgpaVal > 10) {
-        setError("Min CGPA must be between 0 and 10");
-        return;
-      }
-    }
-
-    if (maxArrears.trim()) {
-      const arrearsVal = Number(maxArrears);
-      if (Number.isNaN(arrearsVal) || arrearsVal < 0) {
-        setError("Max Arrears cannot be negative");
-        return;
-      }
-    }
-
-    const resUrlVal = resUrl.trim();
-    if (resUrlVal && !resUrlVal.startsWith("http")) {
-      setError("Resource URL must start with http:// or https://");
-      return;
-    }
-
-    const applyUrlVal = applyUrl.trim();
-    if (applyUrlVal && !applyUrlVal.startsWith("http")) {
-      setError("Apply URL must start with http:// or https://");
-      return;
-    }
-
     const allowedDepartments = splitDepartments(allowedDepartmentsRaw);
     const payload: PlacementCreatePayload = {
       companyName: companyName.trim(),
@@ -176,8 +134,6 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
       setSuccessMsg(res.message || "Created.");
       resetForm();
       await load();
-    } catch (err: any) {
-      setError(err?.message || "Failed to create placement notice");
     } finally {
       setSaving(false);
     }

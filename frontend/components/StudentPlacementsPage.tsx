@@ -20,13 +20,7 @@ const StudentPlacementsPage: React.FC<Props> = ({ user }) => {
   const [error, setError] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
-    // Sort by score descending, then by createdAt
-    return [...notices].sort((a, b) => {
-      const scoreA = a.score || 0;
-      const scoreB = b.score || 0;
-      if (scoreA !== scoreB) return scoreB - scoreA;
-      return (b.createdAt || "").localeCompare(a.createdAt || "");
-    });
+    return [...notices].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   }, [notices]);
 
   const load = async () => {
@@ -81,24 +75,8 @@ const StudentPlacementsPage: React.FC<Props> = ({ user }) => {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400">{n.companyName}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <h3 className="text-xl font-black text-slate-900 leading-snug break-words">{n.title}</h3>
-                    {n.score && n.score > 0.6 && (
-                      <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded-full border border-amber-200 shadow-sm animate-pulse">
-                        BEST MATCH {Math.round(n.score * 100)}%
-                      </span>
-                    )}
-                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mt-2 leading-snug break-words">{n.title}</h3>
                   {n.location ? <p className="text-sm font-bold text-slate-500 mt-2">📍 {n.location}</p> : null}
-                  {n.reasons && n.reasons.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-3">
-                      {n.reasons.map((r, i) => (
-                        <span key={i} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">
-                          ✨ {r}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 {n.applyUrl ? (
                   <button
