@@ -58,6 +58,7 @@ class Settings(BaseSettings):
 
     # Optional Groq (AI-assisted query expansion; does not scrape)
     groq_api_key: str = ""
+    ai_coach_api_key: str = "" # Groq API Key for AI Coach and Advantage
     groq_model: str = ""
     groq_timeout_s: float = 8.0
     groq_max_queries: int = 6

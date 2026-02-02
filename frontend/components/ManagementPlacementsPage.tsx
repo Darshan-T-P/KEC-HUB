@@ -201,12 +201,70 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
           </div>
 
           <div className="lg:col-span-2 space-y-2">
-            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Description</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Description</label>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!companyName || !title) {
+                    alert("Please enter Company and Title first.");
+                    return;
+                  }
+                  setLoading(true);
+                  try {
+                    const fd = new FormData();
+                    fd.append("company", companyName);
+                    fd.append("role", title);
+                    fd.append("points", description || "standard job description");
+                    const res = await fetch("http://localhost:8000/mgmt-ai/draft-description", {
+                      method: "POST",
+                      body: fd,
+                    });
+                    const d = await res.json();
+                    if (d.draft) setDescription(d.draft);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 hover:bg-indigo-100"
+              >
+                ✨ AI Suggest
+              </button>
+            </div>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} required rows={5} className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 font-bold" />
           </div>
 
           <div className="lg:col-span-2 space-y-2">
-            <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Instructions (optional)</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Instructions (optional)</label>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!companyName || !title) {
+                    alert("Please enter Company and Title first.");
+                    return;
+                  }
+                  setLoading(true);
+                  try {
+                    const fd = new FormData();
+                    fd.append("company", companyName);
+                    fd.append("role", title);
+                    fd.append("process", instructions || "standard recruitment process");
+                    const res = await fetch("http://localhost:8000/mgmt-ai/draft-instructions", {
+                      method: "POST",
+                      body: fd,
+                    });
+                    const d = await res.json();
+                    if (d.instructions) setInstructions(d.instructions);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 hover:bg-indigo-100"
+              >
+                ✨ AI Draft
+              </button>
+            </div>
             <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={4} className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 font-bold" />
           </div>
 

@@ -602,6 +602,37 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                 ))}
               </div>
             )}
+
+            {/* Confirmation Overlay */}
+            {confirming && (
+              <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex items-center justify-center p-8 rounded-[2.5rem] animate-in fade-in zoom-in-95 duration-200">
+                <div className="text-center max-w-sm">
+                  <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6 ${confirming.status ? "bg-indigo-100 text-indigo-600" : "bg-rose-100 text-rose-600"}`}>
+                    {confirming.status ? "📋" : "⚠️"}
+                  </div>
+                  <h4 className="text-2xl font-black text-slate-800">Confirm Action</h4>
+                  <p className="mt-3 text-slate-500 font-bold leading-relaxed">
+                    Do you want to mark <span className="text-slate-900 font-black">{confirming.id}</span> as <span className={confirming.status ? "text-indigo-600" : "text-rose-600"}>{confirming.status ? "PRESENT" : "ABSENT"}</span>?
+                  </p>
+
+                  <div className="mt-8 grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setConfirming(null)}
+                      className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      disabled={markingAtt}
+                      onClick={() => handleMarkAttendance(confirming.id, confirming.status)}
+                      className={`py-4 text-white rounded-2xl font-black text-sm shadow-lg transition-all ${confirming.status ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100" : "bg-rose-600 hover:bg-rose-700 shadow-rose-100"}`}
+                    >
+                      {markingAtt ? "..." : "Confirm"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

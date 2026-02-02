@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { FormattedText } from './FormattedText';
 import { Opportunity, User } from '../types';
 import { getCareerAdvice, generateApplicationDraft } from '../services/gemini';
 
@@ -9,9 +10,10 @@ interface Props {
   onClose: () => void;
   onApply: () => void;
   isApplied: boolean;
+  onOpenAIAdvantage?: (role: string, company: string) => void;
 }
 
-const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onApply, isApplied }) => {
+const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onApply, isApplied, onOpenAIAdvantage }) => {
   const [advice, setAdvice] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [loadingAdvice, setLoadingAdvice] = useState(false);
@@ -95,7 +97,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
                 <span className="w-2 h-8 bg-indigo-500 rounded-full"></span>
                 Details & Scope
               </h3>
-              <p className="text-slate-600 leading-relaxed text-xl whitespace-pre-wrap">{opportunity.description}</p>
+              <FormattedText text={opportunity.description} className="text-slate-600 text-xl" />
             </section>
 
             <section>
@@ -119,10 +121,16 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
                 <h3 className="text-2xl font-black text-white">AI Advantage</h3>
                 <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Grounding with Gemini 2.5</p>
               </div>
-              
-              <div className="flex gap-4">
+
+              <div className="flex flex-wrap gap-4">
                 <button onClick={handleGetAdvice} disabled={loadingAdvice} className="flex-1 bg-white/10 text-white px-8 py-5 rounded-2xl text-sm font-black border border-white/10 hover:bg-white/20 transition-all disabled:opacity-50">
                   {loadingAdvice ? 'Analyzing...' : 'Strategic Preparation'}
+                </button>
+                <button
+                  onClick={() => onOpenAIAdvantage?.(opportunity.title, opportunity.company)}
+                  className="flex-1 bg-indigo-500/20 text-indigo-100 px-8 py-5 rounded-2xl text-sm font-black border border-indigo-500/30 hover:bg-indigo-500/30 transition-all"
+                >
+                  🚀 Full Roadmap
                 </button>
                 <button onClick={handleGenerateDraft} disabled={loadingDraft} className="flex-1 bg-indigo-600 text-white px-8 py-5 rounded-2xl text-sm font-black shadow-xl shadow-indigo-900/40 hover:bg-indigo-500 transition-all disabled:opacity-50">
                   {loadingDraft ? 'Drafting...' : 'AI Cover Letter'}
@@ -134,7 +142,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
                   {advice && (
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Strategic Advice</p>
-                      <div className="text-slate-700 text-lg leading-relaxed whitespace-pre-wrap font-medium">{advice}</div>
+                      <FormattedText text={advice} className="text-slate-700 text-lg font-medium" />
                     </div>
                   )}
                   {draft && (
@@ -143,7 +151,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Ready-to-use Draft</p>
                         <button onClick={() => navigator.clipboard.writeText(draft)} className="px-5 py-2 bg-indigo-50 text-indigo-600 rounded-full font-black text-[10px] hover:bg-indigo-100 transition-all">Copy Text</button>
                       </div>
-                      <div className="text-slate-700 text-sm leading-relaxed italic font-medium bg-slate-50 p-6 rounded-3xl border border-slate-100">{draft}</div>
+                      <div className="text-slate-700 text-sm leading-relaxed italic font-medium bg-slate-50 p-6 rounded-3xl border border-slate-100 whitespace-pre-wrap">{draft}</div>
                     </div>
                   )}
                 </div>
@@ -174,11 +182,10 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
               <button 
                 onClick={onApply}
                 disabled={isApplied}
-                className={`w-full py-6 rounded-[2rem] font-black text-xl shadow-2xl transition-all transform hover:scale-[1.05] active:scale-[0.95] ${
-                  isApplied 
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' 
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
-                }`}
+                className={`w-full py-6 rounded-[2rem] font-black text-xl shadow-2xl transition-all transform hover:scale-[1.05] active:scale-[0.95] ${isApplied
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+                  }`}
               >
                 {isApplied ? 'Application Submitted' : isLiveResult ? 'Apply on Web' : 'Submit Application'}
               </button>

@@ -21,6 +21,8 @@ import ManagementNotesPage from './components/ManagementNotesPage';
 import StudentInstructionsPage from './components/StudentInstructionsPage';
 import StudentNotesPage from './components/StudentNotesPage';
 import StudentResumeAnalysisPage from './components/StudentResumeAnalysisPage';
+import AIAdvantagePage from './components/AIAdvantagePage';
+import AICoachPage from './components/AICoachPage';
 import { eventService, EventItem } from './services/events';
 import { alumniService, AlumniPost } from './services/alumni';
 import { referralService, ReferralRequestItem } from './services/referrals';
@@ -32,7 +34,8 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
   const [applications, setApplications] = useState<Application[]>(MOCK_APPLICATIONS);
-  const [interviews, setInterviews] = useState<Interview[]>(MOCK_INTERVIEWS);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [aiInitialData, setAiInitialData] = useState<{ role?: string, company?: string } | null>(null);
   const [discoveredOpps, setDiscoveredOpps] = useState<Opportunity[]>([]);
   const [isCrawling, setIsCrawling] = useState(false);
   const [lastCrawlTime, setLastCrawlTime] = useState<string | null>(null);
@@ -926,6 +929,16 @@ const App: React.FC = () => {
         {activeTab === 'resume_analyzer' && user.role === 'student' && (
           <StudentResumeAnalysisPage user={user} />
         )}
+        {activeTab === 'ai-coach' && (user.role === 'student' || user.role === 'alumni') && (
+          <AICoachPage user={user} />
+        )}
+        {activeTab === 'ai-advantage' && user.role === 'student' && (
+          <AIAdvantagePage
+            user={user}
+            initialRole={aiInitialData?.role}
+            initialCompany={aiInitialData?.company}
+          />
+        )}
         {activeTab === 'chat' && (user.role === 'student' || user.role === 'alumni') && (
           <ChatPage user={user} />
         )}
@@ -1018,6 +1031,11 @@ const App: React.FC = () => {
             onClose={() => setSelectedOpp(null)}
             onApply={() => { handleApply(selectedOpp); setSelectedOpp(null); }}
             isApplied={applications.some(a => a.opportunityId === selectedOpp.id)}
+            onOpenAIAdvantage={(role, company) => {
+              setAiInitialData({ role, company });
+              setActiveTab('ai-advantage');
+              setSelectedOpp(null);
+            }}
           />
         )}
       </Layout>

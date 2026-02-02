@@ -32,6 +32,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'alumni_posts', label: 'My Posts', icon: '🧾' },
         { id: 'alumni_requests', label: 'Referrals', icon: '✅' },
+        { id: 'ai-coach', label: 'AI Coach', icon: '🤖' },
         { id: 'chat', label: 'Chats', icon: '💬' },
         { id: 'profile', label: 'My Profile', icon: '👤' },
       ];
@@ -49,10 +50,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
       return [
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'opportunities', label: 'Explore Hub', icon: '🔍' },
+<<<<<<< HEAD
+=======
+        { id: 'ai-coach', label: 'AI Coach', icon: '🤖' },
+>>>>>>> origin/Alwin
         { id: 'placements', label: 'Placements', icon: '🏢' },
         { id: 'student_instructions', label: 'Instructions', icon: '🧭' },
         { id: 'student_notes', label: 'Notes', icon: '📚' },
-        { id: 'resume_analyzer', label: 'Resume Analyzer', icon: '🧠' },
+        { id: 'resume_analyzer', label: 'Resume Analyzer', icon: '📄' },
         { id: 'events', label: 'Events', icon: '📅' },
         { id: 'alumni', label: 'Alumni', icon: '🎓' },
         { id: 'chat', label: 'Chats', icon: '💬' },

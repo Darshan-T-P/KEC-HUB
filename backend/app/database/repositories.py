@@ -52,6 +52,37 @@ class VerifiedEmailRepository:
         return doc is not None
 
 
+class AuthorizedEmailRepository:
+    """Repository to check emails against an authorized list in another database/collection."""
+    def __init__(self, db: AsyncIOMotorDatabase):
+        # The user's collection uses 'sheet1'
+        self.col = db["sheet1"]
+
+    async def is_authorized(self, email: str) -> bool:
+        if not email:
+            return False
+            
+        search_email = email.strip().lower()
+        
+        # The debug showed field name is 'Email ID' and some have trailing spaces.
+        # We'll use a case-insensitive regex that also ignores trailing whitespace in the DB.
+        import re
+        pattern = re.compile(f"^{re.escape(search_email)}\\s*$", re.IGNORECASE)
+        
+        # Check 'Email ID' field
+        doc = await self.col.find_one({"Email ID": pattern})
+        if doc:
+            return True
+            
+        # Fallback to other common field names just in case
+        doc = await self.col.find_one({"email": pattern})
+        if doc:
+            return True
+            
+        doc = await self.col.find_one({"Email": pattern})
+        return doc is not None
+
+
 class UserRepository:
     def __init__(self, db: AsyncIOMotorDatabase):
         self.col = db["users"]
