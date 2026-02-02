@@ -71,7 +71,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
             {isLiveResult && (
               <div className="bg-indigo-50/80 p-6 rounded-[2rem] border border-indigo-100 shadow-inner">
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
+                   <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-2">
                     <span className="text-lg">🌐</span> Source Discovery Info
                   </p>
                   <a href={opportunity.sourceUrl} target="_blank" className="text-xs font-black text-indigo-600 bg-white px-4 py-2 rounded-xl shadow-sm border border-indigo-100 hover:bg-indigo-50 transition-colors">
@@ -106,7 +106,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {(opportunity.requirements || []).map((req, i) => (
                   <div key={i} className="flex items-start gap-4 bg-slate-50 p-6 rounded-[2rem] border border-slate-100 group hover:border-indigo-200 transition-all hover:bg-white hover:shadow-xl">
-                    <span className="w-8 h-8 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xs font-black text-indigo-500 border border-slate-50">0{i + 1}</span>
+                    <span className="w-8 h-8 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xs font-black text-indigo-500 border border-slate-50">0{i+1}</span>
                     <span className="text-sm font-bold text-slate-700 leading-snug">{req}</span>
                   </div>
                 ))}
@@ -119,7 +119,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
                 <h3 className="text-2xl font-black text-white">AI Advantage</h3>
                 <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Grounding with Gemini 2.5</p>
               </div>
-
+              
               <div className="flex gap-4">
                 <button onClick={handleGetAdvice} disabled={loadingAdvice} className="flex-1 bg-white/10 text-white px-8 py-5 rounded-2xl text-sm font-black border border-white/10 hover:bg-white/20 transition-all disabled:opacity-50">
                   {loadingAdvice ? 'Analyzing...' : 'Strategic Preparation'}
@@ -169,33 +169,16 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, user, onClose, onAppl
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Work Mode</p>
                   <p className="font-black text-slate-800 text-lg">{opportunity.location}</p>
                 </div>
-                {opportunity.score && (
-                  <div className="pt-6 border-t border-slate-200">
-                    <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-3">Discovery Rank</p>
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl font-black text-amber-500">{Math.round(opportunity.score * 100)}%</span>
-                      <p className="text-[10px] font-bold text-slate-400 leading-tight">Match relevance based on your skills & profile</p>
-                    </div>
-                    {opportunity.reasons && opportunity.reasons.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-4">
-                        {opportunity.reasons.map((r, i) => (
-                          <span key={i} className="text-[9px] font-black text-amber-700 bg-amber-100 rounded-lg px-2 py-1 uppercase tracking-wider">
-                            ✨ {r}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
-              <button
+              <button 
                 onClick={onApply}
                 disabled={isApplied}
-                className={`w-full py-6 rounded-[2rem] font-black text-xl shadow-2xl transition-all transform hover:scale-[1.05] active:scale-[0.95] ${isApplied
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                className={`w-full py-6 rounded-[2rem] font-black text-xl shadow-2xl transition-all transform hover:scale-[1.05] active:scale-[0.95] ${
+                  isApplied 
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' 
                     : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
-                  }`}
+                }`}
               >
                 {isApplied ? 'Application Submitted' : isLiveResult ? 'Apply on Web' : 'Submit Application'}
               </button>

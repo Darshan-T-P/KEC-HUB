@@ -38,8 +38,6 @@ export type PlacementItem = {
   maxArrears?: number | null;
   resources: PlacementResourceItem[];
   createdAt: string;
-  score?: number;
-  reasons?: string[];
 };
 
 export type PlacementCreatePayload = {

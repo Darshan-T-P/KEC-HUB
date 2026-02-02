@@ -56,8 +56,6 @@ export type EventRegistrationItem = {
   studentEmail: string;
   studentDepartment?: string | null;
   answers: Record<string, string>;
-  isPresent: boolean;
-  attendedAt?: string | null;
   createdAt: string;
 };
 
@@ -163,42 +161,5 @@ export const eventService = {
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.registrations) ? (data.registrations as EventRegistrationItem[]) : [];
-  },
-
-  listMyRegistrations: async (student: Pick<User, "email" | "role">): Promise<EventRegistrationItem[]> => {
-    const res = await fetch(`${API_BASE_URL}/events/registrations/mine/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`);
-    const data = await res.json().catch(() => null);
-    if (!data?.success) return [];
-    return Array.isArray(data?.registrations) ? (data.registrations as EventRegistrationItem[]) : [];
-  },
-
-  markAttendance: async (
-    manager: Pick<User, "email" | "role">,
-    eventId: string,
-    studentIdentifier: string
-  ): Promise<{ success: boolean; message: string }> => {
-    const res = await fetch(`${API_BASE_URL}/events/${encodeURIComponent(eventId)}/attendance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        managerEmail: manager.email,
-        role: manager.role,
-        studentIdentifier,
-      }),
-    });
-
-    if (res.ok) {
-      const data = await res.json().catch(() => null);
-      return (data || { success: true, message: "Attendance marked" }) as any;
-    }
-
-    return { success: false, message: await parseApiError(res) };
-  },
-
-  getAttendanceReportUrl: (
-    manager: Pick<User, "email" | "role">,
-    eventId: string
-  ): string => {
-    return `${API_BASE_URL}/events/${encodeURIComponent(eventId)}/attendance/report?email=${encodeURIComponent(manager.email)}&role=${encodeURIComponent(manager.role)}`;
   },
 };

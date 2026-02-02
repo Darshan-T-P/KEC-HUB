@@ -11,31 +11,22 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: Details
 
   const [role, setRole] = useState<UserRole>('student');
-
+  
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [otpInput, setOtpInput] = useState('');
-
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-
-  const validateEmail = (email: string) => {
-    return email.toLowerCase().endsWith('@kongu.edu') || email.toLowerCase().endsWith('@kongu.ac.in');
-  };
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
-
-    if (!validateEmail(email)) {
-      setError('Please use a valid Kongu email address (@kongu.edu or @kongu.ac.in)');
-      return;
-    }
-
     setLoading(true);
+    
     const res = await authService.sendOTP(email);
     if (res.success) {
       setSuccessMsg(res.message);
@@ -49,13 +40,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (otpInput.length !== 6) {
-      setError('Please enter a valid 6-digit code');
-      return;
-    }
-
     setLoading(true);
+    
     const res = await authService.verifyOTP(email, otpInput);
     if (res.success) {
       setStep(3);
@@ -68,22 +54,11 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (name.trim().length < 3) {
-      setError('Full name must be at least 3 characters long');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      return;
-    }
-
     setLoading(true);
     const res = await authService.register(name, email, password, role);
     if (res.success) {
       if (res.user) {
         onLoginSuccess({
-          ...res.user,
           name: res.user.name || name,
           email: res.user.email || email,
           role: res.user.role || role,
@@ -101,22 +76,11 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (!validateEmail(email)) {
-      setError('Please use a valid Kongu email address (@kongu.edu or @kongu.ac.in)');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      return;
-    }
-
     setLoading(true);
     const res = await authService.login(email, password, role);
     if (res.success) {
       if (res.user) {
         onLoginSuccess({
-          ...res.user,
           name: res.user.name || 'Student',
           email: res.user.email || email,
           role: res.user.role || role,
@@ -145,10 +109,11 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         ).map((opt) => (
           <label
             key={opt.value}
-            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-black text-xs uppercase tracking-wider cursor-pointer transition-all ${role === opt.value
-              ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-              : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-white'
-              }`}
+            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border font-black text-xs uppercase tracking-wider cursor-pointer transition-all ${
+              role === opt.value
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-white'
+            }`}
           >
             <input
               type="radio"
@@ -193,8 +158,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             <RoleSelector compact />
             <div>
               <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Kongu Email</label>
-              <input
-                type="email"
+              <input 
+                type="email" 
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -204,8 +169,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             </div>
             <div>
               <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Password</label>
-              <input
-                type="password"
+              <input 
+                type="password" 
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -213,7 +178,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none font-bold"
               />
             </div>
-            <button
+            <button 
               disabled={loading}
               className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
             >
@@ -227,8 +192,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 <RoleSelector compact />
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Kongu Email Address</label>
-                  <input
-                    type="email"
+                  <input 
+                    type="email" 
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -237,7 +202,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                   />
                   <p className="mt-3 text-[10px] text-slate-400 font-bold ml-1 uppercase tracking-wider">Restricted to @kongu.edu / @kongu.ac.in</p>
                 </div>
-                <button
+                <button 
                   disabled={loading}
                   className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50"
                 >
@@ -254,8 +219,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">6-Digit Code</label>
-                  <input
-                    type="text"
+                  <input 
+                    type="text" 
                     required
                     maxLength={6}
                     value={otpInput}
@@ -264,7 +229,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none text-center text-2xl font-black tracking-[0.5em]"
                   />
                 </div>
-                <button
+                <button 
                   disabled={loading}
                   className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50"
                 >
@@ -279,8 +244,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 <RoleSelector compact />
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Full Name</label>
-                  <input
-                    type="text"
+                  <input 
+                    type="text" 
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -290,8 +255,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Password</label>
-                  <input
-                    type="password"
+                  <input 
+                    type="password" 
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -299,7 +264,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none font-bold"
                   />
                 </div>
-                <button
+                <button 
                   disabled={loading}
                   className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
                 >
@@ -311,7 +276,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         )}
 
         <div className="mt-8 text-center border-t border-slate-50 pt-8">
-          <button
+          <button 
             onClick={() => {
               setIsLogin(!isLogin);
               setStep(1);
@@ -324,7 +289,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
           </button>
         </div>
       </div>
-
+      
       <p className="mt-10 text-slate-400 text-xs font-black uppercase tracking-[0.3em] relative z-10">
         © 2024 Kongu Engineering College
       </p>
