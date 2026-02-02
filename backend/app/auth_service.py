@@ -30,10 +30,11 @@ def _as_utc_aware(dt: datetime) -> datetime:
 
 
 class AuthService:
-    def __init__(self, otp_repo: OtpRepository, verified_repo: VerifiedEmailRepository, user_repo: UserRepository):
+    def __init__(self, otp_repo: OtpRepository, verified_repo: VerifiedEmailRepository, user_repo: UserRepository, student_email_repo: 'StudentEmailRepository'):
         self.otp_repo = otp_repo
         self.verified_repo = verified_repo
         self.user_repo = user_repo
+        self.student_email_repo = student_email_repo
 
     async def send_otp(self, email: str) -> Literal["console", "smtp"]:
         now = utc_now()
@@ -118,6 +119,21 @@ class AuthService:
         if not await self.verified_repo.is_verified(email):
             raise ValueError("Email not verified. Please verify OTP before registering.")
 
+        # Validate student and event_manager emails against the database (only if data is loaded)
+        if role in ["student", "event_manager"]:
+            # Check if email validation data is available
+            has_validation_data = await self.student_email_repo.has_data()
+            print(f"[AUTH] Registration for {email} ({role}) - Validation data available: {has_validation_data}")
+            
+            if has_validation_data:
+                is_valid = await self.student_email_repo.is_valid_student_email(email)
+                print(f"[AUTH] Email validation result: {is_valid}")
+                if not is_valid:
+                    raise ValueError(f"Email '{email}' is not authorized for {role} registration. Please use a valid institutional email.")
+            else:
+                print(f"[AUTH] No validation data - allowing registration for development")
+            # If no validation data, allow any email (for development/testing)
+
         existing = await self.user_repo.find_by_email_and_role(email, role)
         if existing is not None:
             raise ValueError("This email is already registered for the selected role.")
@@ -138,23 +154,48 @@ class AuthService:
         )
 
     async def login(self, email: str, password: str, role: str = "student") -> dict:
+        """
+        Login flow:
+        1. Find user in kec_opportunities_hub.users collection by email and role
+        2. Verify password matches the stored hash
+        3. Return user profile data
+        """
+        print(f"[AUTH LOGIN] Email: {email}, Role: {role}")
+        
+        # Step 1: Find user in users collection
         user = await self.user_repo.find_by_email_and_role(email, role)
+        
         if user is None:
+            print(f"[AUTH LOGIN] User not found")
             raise ValueError("Invalid email or password.")
-
+        
+        print(f"[AUTH LOGIN] User found: {user.get('name')}")
+        
+        # Step 2: Verify password
+        stored_password_hash = user.get("passwordHash", "")
+        
+        if not stored_password_hash:
+            print(f"[AUTH LOGIN] No password hash stored")
+            raise ValueError("Invalid email or password.")
+        
         try:
-            ok = _pwd.verify(password, user.get("passwordHash", ""))
-        except PasswordSizeError:
-            raise ValueError("Password is too long. Please choose a shorter password.")
-
-        if not ok:
+            password_matches = _pwd.verify(password, stored_password_hash)
+            print(f"[AUTH LOGIN] Password matches: {password_matches}")
+        except Exception as e:
+            print(f"[AUTH LOGIN] Password verification error: {e}")
             raise ValueError("Invalid email or password.")
-
+        
+        if not password_matches:
+            print(f"[AUTH LOGIN] Incorrect password")
+            raise ValueError("Invalid email or password.")
+        
+        # Step 3: Return user profile
+        print(f"[AUTH LOGIN] Login successful")
         profile = user.get("profile") or {}
         return {
-            "name": user.get("name", "Student"),
+            "name": user.get("name", "User"),
             "email": user.get("email", email),
-            "role": user.get("role", role) or role,
+            "role": user.get("role", role),
             "department": user.get("department", "Computer Science"),
             **profile,
         }

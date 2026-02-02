@@ -136,7 +136,15 @@ const ChatPage: React.FC<Props> = ({ user }) => {
                         <div className={`max-w-[80%] p-4 rounded-2xl border font-bold whitespace-pre-wrap ${mine ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-800 border-slate-100"}`}>
                           <p className="text-sm">{m.text}</p>
                           <p className={`mt-2 text-[10px] font-black uppercase tracking-widest ${mine ? "text-indigo-100" : "text-slate-400"}`}>
-                            {new Date(m.createdAt).toLocaleString()}
+                            {(() => {
+                              const d = new Date(m.createdAt);
+                              const day = String(d.getDate()).padStart(2, '0');
+                              const month = String(d.getMonth() + 1).padStart(2, '0');
+                              const year = d.getFullYear();
+                              const hours = String(d.getHours()).padStart(2, '0');
+                              const mins = String(d.getMinutes()).padStart(2, '0');
+                              return `${day}-${month}-${year} ${hours}:${mins}`;
+                            })()}
                           </p>
                         </div>
                       </div>

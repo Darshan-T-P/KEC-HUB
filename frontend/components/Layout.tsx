@@ -1,16 +1,19 @@
 
 import React, { useMemo, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { User } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
   user: User;
+  onSignOut: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user }) => {
+const Layout: React.FC<LayoutProps> = ({ children, user, onSignOut }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const activeTab = location.pathname.replace('/', '') || 'dashboard';
 
   const userInitials = useMemo(() => {
     const parts = (user?.name || '').trim().split(/\s+/).filter(Boolean);
@@ -50,6 +53,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'opportunities', label: 'Explore Hub', icon: '🔍' },
         { id: 'placements', label: 'Placements', icon: '🏢' },
+        { id: 'experiences', label: 'Experiences', icon: '💼' },
         { id: 'student_instructions', label: 'Instructions', icon: '🧭' },
         { id: 'student_notes', label: 'Notes', icon: '📚' },
         { id: 'resume_analyzer', label: 'Resume Analyzer', icon: '🧠' },
@@ -110,7 +114,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
               <button
                 key={item.id}
                 onClick={() => {
-                  setActiveTab(item.id);
+                  navigate(`/${item.id}`);
                   setIsSidebarOpen(false);
                 }}
                 className={`
@@ -178,6 +182,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
             <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
             <button className="hidden sm:block text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full">
               {userBadge}
+            </button>
+            <button 
+              onClick={onSignOut}
+              className="p-2 rounded-full hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-colors"
+              title="Sign Out"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
             </button>
           </div>
         </header>

@@ -109,8 +109,24 @@ const StudentEventsPage: React.FC<Props> = ({ user }) => {
 
                 <div className="mt-4 text-sm font-bold text-slate-500">
                   <p>Venue: {ev.venue || "—"}</p>
-                  <p>Starts: {new Date(ev.startAt).toLocaleString()}</p>
-                  {ev.endAt ? <p>Ends: {new Date(ev.endAt).toLocaleString()}</p> : null}
+                  <p>Starts: {(() => {
+                    const d = new Date(ev.startAt);
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const year = d.getFullYear();
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const mins = String(d.getMinutes()).padStart(2, '0');
+                    return `${day}-${month}-${year} ${hours}:${mins}`;
+                  })()}</p>
+                  {ev.endAt ? <p>Ends: {(() => {
+                    const d = new Date(ev.endAt);
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const year = d.getFullYear();
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const mins = String(d.getMinutes()).padStart(2, '0');
+                    return `${day}-${month}-${year} ${hours}:${mins}`;
+                  })()}</p> : null}
                 </div>
 
                 {ev.poster?.url ? (

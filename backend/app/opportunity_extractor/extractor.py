@@ -8,6 +8,7 @@ from .scoring import score
 from .types import ExtractedOpportunity, ProfileSignals
 from .utils import is_active, looks_closed, looks_senior
 from .sources.adzuna import AdzunaIndiaSource
+from .sources.web_search import WebSearchSource
 from .groq_expander import GroqQueryExpander
 
 
@@ -81,6 +82,11 @@ class OpportunityExtractor:
             results_per_page=min(50, int(settings.opp_max_results or 25)),
             query_expander=(self._groq.expand if self._groq else None),
         )
+        
+        # Web search for discovering exact job links (optional).
+        self._web_search = WebSearchSource(
+            query_expander=(self._groq.expand if self._groq else None),
+        )
 
     @property
     def groq_enabled(self) -> bool:
@@ -92,8 +98,15 @@ class OpportunityExtractor:
 
     async def extract_with_meta(self, profile: ProfileSignals) -> tuple[list[ExtractedOpportunity], dict]:
         adzuna_ops = await self._adzuna.fetch(profile)
+        
+        # Web search (optional, enabled by WEB_SEARCH_PROVIDER config).
+        web_ops: list[ExtractedOpportunity] = []
+        web_meta: dict = {"enabled": False, "provider": None, "used": False, "error": None}
+        
+        if self._web_search.enabled:
+            web_ops, web_meta = await self._web_search.fetch_with_meta(profile)
 
-        combined = _dedupe([*adzuna_ops])
+        combined = _dedupe([*adzuna_ops, *web_ops])
 
         # Filter closed/expired/old
         filtered: list[ExtractedOpportunity] = []
@@ -120,6 +133,4 @@ class OpportunityExtractor:
         # Rank
         ranked = [score(op, profile) for op in filtered]
         ranked.sort(key=lambda x: (x.score, x.deadline or datetime.max.date()), reverse=True)
-        # Keep response compatibility (frontend expects webSearch* fields) but disable web search.
-        web_meta = {"enabled": False, "provider": None, "used": False, "error": None}
         return ranked[: settings.opp_max_results], {"web": web_meta}

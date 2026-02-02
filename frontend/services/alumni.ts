@@ -79,4 +79,43 @@ export const alumniService = {
     const message = typeof (data as any)?.message === "string" ? (data as any).message : `Request failed (${res.status})`;
     return { success: false, message };
   },
+
+  updatePost: async (
+    user: Pick<User, "email" | "role">,
+    postId: string,
+    title: string,
+    description: string,
+    tags: string[],
+    link?: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const cleanedLink = (link ?? "").trim();
+    const res = await fetch(`${API_BASE_URL}/alumni/posts/${encodeURIComponent(postId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        alumniEmail: user.email,
+        role: user.role,
+        title,
+        description,
+        tags,
+        link: cleanedLink ? cleanedLink : undefined,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+
+    if (res.ok) {
+      return (data || { success: true, message: "Updated" }) as any;
+    }
+
+    const detail = (data as any)?.detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      const loc = Array.isArray(first?.loc) ? first.loc.join(".") : "request";
+      const msg = typeof first?.msg === "string" ? first.msg : "Validation error";
+      return { success: false, message: `${loc}: ${msg}` };
+    }
+
+    const message = typeof (data as any)?.message === "string" ? (data as any).message : `Request failed (${res.status})`;
+    return { success: false, message };
+  },
 };

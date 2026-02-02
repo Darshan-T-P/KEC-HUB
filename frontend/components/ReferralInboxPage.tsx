@@ -118,7 +118,13 @@ const ReferralInboxPage: React.FC<Props> = ({ user }) => {
                       </span>
                     </div>
                     <p className="mt-2 text-xs font-bold text-slate-600 line-clamp-2">{r.message}</p>
-                    <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(r.createdAt).toLocaleString()}</p>
+                    <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">{(() => {
+                      const d = new Date(r.createdAt);
+                      const day = String(d.getDate()).padStart(2, '0');
+                      const month = String(d.getMonth() + 1).padStart(2, '0');
+                      const year = d.getFullYear();
+                      return `${day}-${month}-${year}`;
+                    })()}</p>
                     <div className="mt-3 flex gap-2">
                       <button
                         onClick={(e) => { e.stopPropagation(); decide(r.id, "approved"); }}
@@ -161,7 +167,19 @@ const ReferralInboxPage: React.FC<Props> = ({ user }) => {
                     </div>
                     <p className="mt-2 text-xs font-bold text-slate-600 line-clamp-2">{r.message}</p>
                     <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      {r.decidedAt ? `Decided: ${new Date(r.decidedAt).toLocaleString()}` : `Created: ${new Date(r.createdAt).toLocaleString()}`}
+                      {r.decidedAt ? `Decided: ${(() => {
+                        const d = new Date(r.decidedAt);
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const year = d.getFullYear();
+                        return `${day}-${month}-${year}`;
+                      })()}` : `Created: ${(() => {
+                        const d = new Date(r.createdAt);
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const year = d.getFullYear();
+                        return `${day}-${month}-${year}`;
+                      })()}`}
                     </p>
                   </button>
                 ))}

@@ -128,6 +128,61 @@ export const eventService = {
     return { success: false, message: await parseApiError(res) };
   },
 
+  updatePoster: async (
+    manager: Pick<User, "email" | "role">,
+    eventId: string,
+    file: File
+  ): Promise<{ success: boolean; message: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+
+    const res = await fetch(
+      `${API_BASE_URL}/events/${encodeURIComponent(eventId)}/poster?email=${encodeURIComponent(manager.email)}&role=${encodeURIComponent(manager.role)}`,
+      {
+        method: "PUT",
+        body: form,
+      }
+    );
+
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      return (data || { success: true, message: "Poster updated" }) as any;
+    }
+
+    return { success: false, message: await parseApiError(res) };
+  },
+
+  updateEvent: async (
+    manager: Pick<User, "email" | "role">,
+    eventId: string,
+    payload: {
+      title: string;
+      description: string;
+      venue?: string;
+      startAt: string;
+      endAt?: string;
+      allowedDepartments: string[];
+      formFields: EventFormField[];
+    }
+  ): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE_URL}/events/${encodeURIComponent(eventId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        managerEmail: manager.email,
+        role: manager.role,
+        ...payload,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      return (data || { success: true, message: "Event updated" }) as any;
+    }
+
+    return { success: false, message: await parseApiError(res) };
+  },
+
   register: async (
     student: Pick<User, "email" | "role">,
     eventId: string,

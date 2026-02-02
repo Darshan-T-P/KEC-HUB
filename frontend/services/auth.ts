@@ -60,12 +60,12 @@ export const authService = {
     }
   },
 
-  register: async (name: string, email: string, password: string, role: UserRole): Promise<AuthResponse> => {
+  register: async (name: string, email: string, password: string, role: UserRole, department: string = 'Computer Science'): Promise<AuthResponse> => {
     try {
       const res = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, role, department: 'Computer Science' })
+        body: JSON.stringify({ name, email, password, role, department })
       });
       const data = (await res.json()) as AuthResponse;
       return data;

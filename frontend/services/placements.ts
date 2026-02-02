@@ -22,6 +22,15 @@ export type PlacementResourceItem = {
   url: string;
 };
 
+export type PlacementRound = {
+  roundNumber: number;
+  name: string;
+  description?: string | null;
+  selectedStudents: string[];
+  uploadedAt?: string | null;
+  uploadedBy?: string | null;
+};
+
 export type PlacementItem = {
   id: string;
   staffEmail: string;
@@ -37,7 +46,13 @@ export type PlacementItem = {
   minCgpa?: number | null;
   maxArrears?: number | null;
   resources: PlacementResourceItem[];
+  rounds: PlacementRound[];
   createdAt: string;
+};
+
+export type PlacementRoundInfo = {
+  name: string;
+  description?: string;
 };
 
 export type PlacementCreatePayload = {
@@ -53,6 +68,16 @@ export type PlacementCreatePayload = {
   minCgpa?: number;
   maxArrears?: number;
   resources: PlacementResourceItem[];
+  rounds?: PlacementRoundInfo[];
+};
+
+export type StudentRoundStatus = {
+  placementId: string;
+  companyName: string;
+  title: string;
+  roundNumber: number;
+  roundName: string;
+  notifiedAt: string;
 };
 
 export const placementService = {
@@ -110,5 +135,39 @@ export const placementService = {
 
     const blob = await res.blob();
     return { success: true, message: "ok", blob };
+  },
+
+  uploadRoundStudents: async (
+    staff: Pick<User, "email" | "role">,
+    noticeId: string,
+    roundNumber: number,
+    file: File
+  ): Promise<{ success: boolean; message: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(
+      `${API_BASE_URL}/placements/${encodeURIComponent(noticeId)}/round/${roundNumber}/upload-students?email=${encodeURIComponent(staff.email)}&role=${encodeURIComponent(staff.role)}`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      return (data || { success: true, message: "Students uploaded" }) as any;
+    }
+
+    return { success: false, message: await parseApiError(res) };
+  },
+
+  getMySelections: async (student: Pick<User, "email" | "role">): Promise<StudentRoundStatus[]> => {
+    const res = await fetch(
+      `${API_BASE_URL}/placements/my-selections/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`
+    );
+    const data = await res.json().catch(() => null);
+    if (!data?.success) return [];
+    return Array.isArray(data?.selections) ? (data.selections as StudentRoundStatus[]) : [];
   },
 };

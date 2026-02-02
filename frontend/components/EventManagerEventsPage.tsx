@@ -32,6 +32,14 @@ const toIsoFromLocal = (local: string): string => {
   return d.toISOString();
 };
 
+const getTodayString = (): string => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -41,6 +49,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
   const [venue, setVenue] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
   const [allDepts, setAllDepts] = useState(true);
   const [allowedDepartments, setAllowedDepartments] = useState<string[]>([]);
@@ -141,33 +150,75 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
       })),
     };
 
-    const res = await eventService.createEvent(user, payload);
+    let res;
+    if (editingEventId) {
+      res = await eventService.updateEvent(user, editingEventId, payload);
+    } else {
+      res = await eventService.createEvent(user, payload);
+    }
+
     if (res.success) {
-      setToast("Event created. Upload poster for better reach.");
+      setToast(editingEventId ? "Event updated successfully." : "Event created. Upload poster for better reach.");
       setTitle("");
       setDescription("");
       setVenue("");
       setStartAt("");
       setEndAt("");
+      setAllowedDepartments([]);
+      setAllDepts(false);
+      setFields([]);
+      setEditingEventId(null);
+      refresh();
+    } else {
+      setError(res.message || `Failed to ${editingEventId ? 'update' : 'create'} event.`);
+    }
+  };
+
+  const startEditEvent = (ev: EventItem) => {
+    setEditingEventId(ev.id);
+    setTitle(ev.title);
+    setDescription(ev.description);
+    setVenue(ev.venue || "");
+    
+    // Convert ISO to datetime-local format
+    const startDate = new Date(ev.startAt);
+    const startLocal = startDate.toISOString().slice(0, 16);
+    setStartAt(startLocal);
+    
+    if (ev.endAt) {
+      const endDate = new Date(ev.endAt);
+      const endLocal = endDate.toISOString().slice(0, 16);
+      setEndAt(endLocal);
+    } else {
+      setEndAt("");
+    }
+    
+    if (!ev.allowedDepartments || ev.allowedDepartments.length === 0) {
       setAllDepts(true);
       setAllowedDepartments([]);
-
-      if (res.eventId && createPosterFile) {
-        const up = await eventService.uploadPoster(user, res.eventId, createPosterFile);
-        if (up.success) {
-          setToast("Event created and poster uploaded.");
-        } else {
-          setToast("Event created, but poster upload failed.");
-          setError(up.message || "Poster upload failed");
-        }
-      }
-
-      setCreatePosterFile(null);
-      await refresh();
-      return;
+    } else {
+      setAllDepts(false);
+      setAllowedDepartments(ev.allowedDepartments);
     }
+    
+    setFields(ev.formFields || []);
+    setError(null);
+    setToast(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-    setError(res.message || "Failed to create event");
+  const cancelEdit = () => {
+    setEditingEventId(null);
+    setTitle("");
+    setDescription("");
+    setVenue("");
+    setStartAt("");
+    setEndAt("");
+    setAllowedDepartments([]);
+    setAllDepts(false);
+    setFields([]);
+    setError(null);
+    setToast(null);
   };
 
   const uploadPoster = async (eventId: string) => {
@@ -177,15 +228,23 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
       setError("Please choose a poster image (PNG/JPG)." );
       return;
     }
-    const res = await eventService.uploadPoster(user, eventId, posterFile);
+    
+    // Check if this event already has a poster
+    const event = events.find(e => e.id === eventId);
+    const hasPoster = event?.poster && posterUrl(event);
+    
+    const res = hasPoster 
+      ? await eventService.updatePoster(user, eventId, posterFile)
+      : await eventService.uploadPoster(user, eventId, posterFile);
+    
     if (res.success) {
-      setToast("Poster uploaded.");
+      setToast(hasPoster ? "Poster updated successfully." : "Poster uploaded.");
       setPosterFile(null);
       setUploadingFor(null);
       await refresh();
       return;
     }
-    setError(res.message || "Poster upload failed");
+    setError(res.message || `${hasPoster ? 'Poster update' : 'Poster upload'} failed`);
   };
 
   const openRegistrations = async (ev: EventItem) => {
@@ -225,7 +284,14 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-slate-50 rounded-2xl border border-slate-100 p-6">
-            <h3 className="font-black text-slate-800">Create Event</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-800">{editingEventId ? "Edit Event" : "Create Event"}</h3>
+              {editingEventId && (
+                <button onClick={cancelEdit} className="text-xs font-black text-slate-500 hover:text-slate-700">
+                  Cancel Edit
+                </button>
+              )}
+            </div>
 
             <div className="mt-4 space-y-4">
               <div>
@@ -251,6 +317,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Start</p>
                   <input
                     type="datetime-local"
+                    min={`${getTodayString()}T00:00`}
                     value={startAt}
                     onChange={(e) => setStartAt(e.target.value)}
                     className="mt-2 w-full p-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
@@ -260,6 +327,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">End (optional)</p>
                   <input
                     type="datetime-local"
+                    min={`${getTodayString()}T00:00`}
                     value={endAt}
                     onChange={(e) => setEndAt(e.target.value)}
                     className="mt-2 w-full p-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
@@ -451,7 +519,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                 onClick={createEvent}
                 className="w-full mt-2 px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-indigo-700"
               >
-                Create Event
+                {editingEventId ? "Update Event" : "Create Event"}
               </button>
             </div>
           </div>
@@ -475,10 +543,24 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-black text-slate-800 text-lg">{ev.title}</p>
-                        <p className="text-xs font-bold text-slate-500">Starts: {new Date(ev.startAt).toLocaleString()}</p>
+                        <p className="text-xs font-bold text-slate-500">Starts: {(() => {
+                          const d = new Date(ev.startAt);
+                          const day = String(d.getDate()).padStart(2, '0');
+                          const month = String(d.getMonth() + 1).padStart(2, '0');
+                          const year = d.getFullYear();
+                          const hours = String(d.getHours()).padStart(2, '0');
+                          const mins = String(d.getMinutes()).padStart(2, '0');
+                          return `${day}-${month}-${year} ${hours}:${mins}`;
+                        })()}</p>
                         <p className="text-xs font-bold text-slate-500">Visibility: {ev.allowedDepartments?.length ? ev.allowedDepartments.join(", ") : "All Departments"}</p>
                       </div>
                       <div className="flex gap-2 flex-wrap justify-end">
+                        <button
+                          onClick={() => startEditEvent(ev)}
+                          className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-xs font-black border border-indigo-200 transition-all"
+                        >
+                          ✏️ Edit
+                        </button>
                         <button
                           onClick={() => { setUploadingFor(ev.id); setPosterFile(null); }}
                           className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-xs"
@@ -588,7 +670,13 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                         {r.studentDepartment || "—"}
                       </span>
                     </div>
-                    <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(r.createdAt).toLocaleString()}</p>
+                    <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">{(() => {
+                      const d = new Date(r.createdAt);
+                      const day = String(d.getDate()).padStart(2, '0');
+                      const month = String(d.getMonth() + 1).padStart(2, '0');
+                      const year = d.getFullYear();
+                      return `${day}-${month}-${year}`;
+                    })()}</p>
                     {Object.keys(r.answers || {}).length > 0 && (
                       <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
                         {Object.entries(r.answers).slice(0, 12).map(([k, v]) => (

@@ -147,7 +147,13 @@ const AlumniHub: React.FC<Props> = ({ user }) => {
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
                         {p.alumniEmail}
                       </span>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{new Date(p.createdAt).toLocaleString()}</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{(() => {
+                        const d = new Date(p.createdAt);
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const year = d.getFullYear();
+                        return `${day}-${month}-${year}`;
+                      })()}</span>
                     </div>
                     <h4 className="mt-3 text-xl font-black text-slate-800">{p.title}</h4>
                     <p className="mt-2 text-slate-600 font-bold whitespace-pre-wrap">{p.description}</p>

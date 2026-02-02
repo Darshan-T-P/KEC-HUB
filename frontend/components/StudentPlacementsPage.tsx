@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { User } from "../types";
-import { placementService, PlacementItem } from "../services/placements";
+import { placementService, PlacementItem, StudentRoundStatus } from "../services/placements";
 
 type Props = {
   user: User;
@@ -11,12 +11,16 @@ const formatMaybeDate = (value?: string | null): string => {
   if (!v) return "";
   const dt = new Date(v);
   if (Number.isNaN(dt.getTime())) return v;
-  return dt.toLocaleString();
+  const day = String(dt.getDate()).padStart(2, '0');
+  const month = String(dt.getMonth() + 1).padStart(2, '0');
+  const year = dt.getFullYear();
+  return `${day}-${month}-${year}`;
 };
 
 const StudentPlacementsPage: React.FC<Props> = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [notices, setNotices] = useState<PlacementItem[]>([]);
+  const [selections, setSelections] = useState<StudentRoundStatus[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
@@ -27,8 +31,12 @@ const StudentPlacementsPage: React.FC<Props> = ({ user }) => {
     setLoading(true);
     setError(null);
     try {
-      const items = await placementService.listVisible({ email: user.email, role: user.role });
+      const [items, mySelections] = await Promise.all([
+        placementService.listVisible({ email: user.email, role: user.role }),
+        placementService.getMySelections({ email: user.email, role: user.role }),
+      ]);
       setNotices(items);
+      setSelections(mySelections);
     } catch (e: any) {
       setError(e?.message || "Failed to load placements.");
     } finally {
@@ -59,6 +67,41 @@ const StudentPlacementsPage: React.FC<Props> = ({ user }) => {
           </button>
         </div>
       </header>
+
+      {selections.length > 0 && (
+        <section className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-200">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">🎉</div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Congratulations!</h3>
+              <p className="text-sm font-bold text-indigo-100 mt-1">You've been selected for placement rounds</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {selections.map((sel, idx) => (
+              <div key={idx} className="bg-white/10 backdrop-blur rounded-2xl p-5 border border-white/20">
+                <p className="text-xs font-black uppercase tracking-widest text-indigo-100">{sel.companyName}</p>
+                <h4 className="text-lg font-black text-white mt-2">{sel.title}</h4>
+                <p className="text-sm font-bold text-indigo-100 mt-3">
+                  Round {sel.roundNumber}: {sel.roundName}
+                </p>
+                {sel.notifiedAt && (
+                  <p className="text-xs font-bold text-indigo-200 mt-2">
+                    Notified: {(() => {
+                      const d = new Date(sel.notifiedAt);
+                      const day = String(d.getDate()).padStart(2, '0');
+                      const month = String(d.getMonth() + 1).padStart(2, '0');
+                      const year = d.getFullYear();
+                      return `${day}-${month}-${year}`;
+                    })()}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {sorted.length === 0 && !loading ? (
         <div className="p-16 text-center bg-slate-50 rounded-[3rem] border-4 border-dashed border-slate-200">

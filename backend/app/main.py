@@ -4,11 +4,12 @@ import os
 import secrets
 import csv
 import io
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import File, UploadFile
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi import Form
 from fastapi import Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,8 +28,13 @@ try:
 except Exception:  # pragma: no cover
     _pdfminer_extract_text = None  # type: ignore
 
+try:
+    import openpyxl  # type: ignore
+except Exception:  # pragma: no cover
+    openpyxl = None  # type: ignore
+
 from .auth_service import AuthService
-from .database.db import connect_mongodb, disconnect_mongodb, get_db, mongodb_ok
+from .database.db import connect_mongodb, disconnect_mongodb, get_db, get_student_validation_db, mongodb_ok
 from .models import (
     ApiResponse,
     AlumniListResponse,
@@ -56,6 +62,10 @@ from .models import (
     PlacementCreateRequest,
     PlacementItem,
     PlacementListResponse,
+    PlacementExperienceCreateRequest,
+    PlacementExperienceItem,
+    PlacementExperienceListResponse,
+    PlacementRound,
     ProfileResponse,
     ProfileUpdateRequest,
     RegisterRequest,
@@ -66,6 +76,8 @@ from .models import (
     ResumeAnalysisResult,
     ResumeImprovement,
     SendOtpRequest,
+    StudentPlacementStatusResponse,
+    StudentRoundStatus,
     UserProfile,
     UserRole,
     VerifyOtpRequest,
@@ -79,34 +91,23 @@ from .database.repositories import (
     ManagementInstructionRepository,
     ManagementNoteRepository,
     PlacementRepository,
+    PlacementExperienceRepository,
     OtpRepository,
     ReferralRepository,
+    StudentEmailRepository,
     UserRepository,
     VerifiedEmailRepository,
     make_thread_id,
 )
-from .email_sender import notify_referral_decision, notify_referral_request
+from .email_sender import notify_referral_decision, notify_referral_request, notify_placement_round_selection
 from .settings import settings
 
 from .opportunity_extractor.extractor import OpportunityExtractor
 from .opportunity_extractor.types import ProfileSignals
 from .resume_analyzer import GroqResumeAnalyzer
 
-app = FastAPI(title="KEC Opportunities Hub API")
 
-_BACKEND_DIR = Path(__file__).resolve().parents[1]
-_UPLOADS_DIR = _BACKEND_DIR / "uploads"
-_RESUMES_DIR = _UPLOADS_DIR / "resumes"
-_EVENT_POSTERS_DIR = _UPLOADS_DIR / "event_posters"
-_MANAGEMENT_NOTES_DIR = _UPLOADS_DIR / "management_notes"
-
-_RESUMES_DIR.mkdir(parents=True, exist_ok=True)
-_EVENT_POSTERS_DIR.mkdir(parents=True, exist_ok=True)
-_MANAGEMENT_NOTES_DIR.mkdir(parents=True, exist_ok=True)
-
-# Serve uploaded files (resume) for development.
-app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
-
+# Global repository variables
 _auth_service: AuthService | None = None
 _user_repo: UserRepository | None = None
 _alumni_posts: AlumniPostRepository | None = None
@@ -116,41 +117,31 @@ _chat_messages: ChatMessageRepository | None = None
 _events: EventRepository | None = None
 _event_regs: EventRegistrationRepository | None = None
 _placements: PlacementRepository | None = None
+_placement_experiences: PlacementExperienceRepository | None = None
 _mgmt_instructions: ManagementInstructionRepository | None = None
 _mgmt_notes: ManagementNoteRepository | None = None
 _opportunity_extractor = OpportunityExtractor()
 _resume_analyzer: GroqResumeAnalyzer | None = None
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list(),
-    allow_credentials=True,
-    allow_methods=["*"] ,
-    allow_headers=["*"],
-)
 
-
-@app.on_event("startup")
-async def _startup() -> None:
-    global _auth_service
-    global _user_repo
-    global _alumni_posts
-    global _referrals
-    global _chat_threads
-    global _chat_messages
-    global _events
-    global _event_regs
-    global _placements
-    global _mgmt_instructions
-    global _mgmt_notes
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events"""
+    global _auth_service, _user_repo, _alumni_posts, _referrals
+    global _chat_threads, _chat_messages, _events, _event_regs
+    global _placements, _placement_experiences, _mgmt_instructions, _mgmt_notes
     global _resume_analyzer
-
+    
+    # Startup
     await connect_mongodb()
     if mongodb_ok():
-        db = get_db()
+        db = get_db()  # Main application database (kec_opportunities_hub)
+        student_validation_db = get_student_validation_db()  # Student email validation (kec_hub)
+        
         otp_repo = OtpRepository(db)
         verified_repo = VerifiedEmailRepository(db)
         user_repo = UserRepository(db)
+        student_email_repo = StudentEmailRepository(student_validation_db)  # Use kec_hub for validation
         alumni_posts = AlumniPostRepository(db)
         referrals = ReferralRepository(db)
         chat_threads = ChatThreadRepository(db)
@@ -158,11 +149,13 @@ async def _startup() -> None:
         events = EventRepository(db)
         event_regs = EventRegistrationRepository(db)
         placements = PlacementRepository(db)
+        placement_experiences = PlacementExperienceRepository(db)
         mgmt_instructions = ManagementInstructionRepository(db)
         mgmt_notes = ManagementNoteRepository(db)
 
         await otp_repo.ensure_indexes()
         await verified_repo.ensure_indexes()
+        await student_email_repo.ensure_indexes()
         await user_repo.ensure_indexes()
         await alumni_posts.ensure_indexes()
         await referrals.ensure_indexes()
@@ -171,10 +164,11 @@ async def _startup() -> None:
         await events.ensure_indexes()
         await event_regs.ensure_indexes()
         await placements.ensure_indexes()
+        await placement_experiences.ensure_indexes()
         await mgmt_instructions.ensure_indexes()
         await mgmt_notes.ensure_indexes()
 
-        _auth_service = AuthService(otp_repo=otp_repo, verified_repo=verified_repo, user_repo=user_repo)
+        _auth_service = AuthService(otp_repo=otp_repo, verified_repo=verified_repo, user_repo=user_repo, student_email_repo=student_email_repo)
         _user_repo = user_repo
         _alumni_posts = alumni_posts
         _referrals = referrals
@@ -183,9 +177,9 @@ async def _startup() -> None:
         _events = events
         _event_regs = event_regs
         _placements = placements
+        _placement_experiences = placement_experiences
         _mgmt_instructions = mgmt_instructions
         _mgmt_notes = mgmt_notes
-
     else:
         # Backend can still start, but auth endpoints will return a clear error.
         _auth_service = None
@@ -201,6 +195,35 @@ async def _startup() -> None:
         _mgmt_notes = None
 
     _resume_analyzer = GroqResumeAnalyzer.from_settings()
+    
+    yield  # Application runs here
+    
+    # Shutdown
+    await disconnect_mongodb()
+
+
+app = FastAPI(title="KEC Opportunities Hub API", lifespan=lifespan)
+
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+_UPLOADS_DIR = _BACKEND_DIR / "uploads"
+_RESUMES_DIR = _UPLOADS_DIR / "resumes"
+_EVENT_POSTERS_DIR = _UPLOADS_DIR / "event_posters"
+_MANAGEMENT_NOTES_DIR = _UPLOADS_DIR / "management_notes"
+
+_RESUMES_DIR.mkdir(parents=True, exist_ok=True)
+_EVENT_POSTERS_DIR.mkdir(parents=True, exist_ok=True)
+_MANAGEMENT_NOTES_DIR.mkdir(parents=True, exist_ok=True)
+
+# Serve uploaded files (resume) for development.
+app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list(),
+    allow_credentials=True,
+    allow_methods=["*"] ,
+    allow_headers=["*"],
+)
 
 
 def _extract_resume_text_pdf(data: bytes) -> str:
@@ -416,6 +439,18 @@ def _to_event_item(d: dict) -> EventItem:
 
 def _to_placement_item(d: dict) -> PlacementItem:
     created = d.get("createdAt")
+    rounds_data = d.get("rounds") or []
+    rounds = [
+        PlacementRound(
+            roundNumber=r.get("roundNumber", 0),
+            name=r.get("name", ""),
+            description=r.get("description"),
+            selectedStudents=r.get("selectedStudents", []),
+            uploadedAt=r.get("uploadedAt"),
+            uploadedBy=r.get("uploadedBy"),
+        )
+        for r in rounds_data
+    ]
     return PlacementItem(
         id=_doc_id(d),
         staffEmail=d.get("staffEmail"),
@@ -431,6 +466,7 @@ def _to_placement_item(d: dict) -> PlacementItem:
         minCgpa=d.get("minCgpa"),
         maxArrears=d.get("maxArrears"),
         resources=d.get("resources") or [],
+        rounds=rounds,
         createdAt=_iso(created) if isinstance(created, datetime) else str(created or ""),
     )
 
@@ -476,11 +512,6 @@ def _parse_departments_csv(raw: str | None) -> list[str]:
     if s.lower() in {"all", "*"}:
         return ["all"]
     return [p.strip() for p in s.split(",") if p.strip()]
-
-
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    await disconnect_mongodb()
 
 
 @app.get("/health", response_model=ApiResponse)
@@ -597,13 +628,14 @@ async def register(payload: RegisterRequest) -> AuthUserResponse:
 @app.post("/auth/login", response_model=AuthUserResponse)
 async def login(payload: LoginRequest) -> AuthUserResponse:
     if not mongodb_ok() or _auth_service is None:
-        return AuthUserResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+        raise HTTPException(status_code=503, detail="MongoDB is not connected. Start MongoDB and retry.")
 
     try:
         user = await _auth_service.login(payload.email, payload.password, payload.role)
         return AuthUserResponse(success=True, message="Login successful!", user=UserProfile(**user))
     except ValueError as e:
-        return AuthUserResponse(success=False, message=str(e))
+        # Authentication failures should return 401 Unauthorized, not 200 OK
+        raise HTTPException(status_code=401, detail=str(e))
 
 
 @app.get("/profile/{email}", response_model=ProfileResponse)
@@ -796,6 +828,19 @@ async def create_placement_notice(payload: PlacementCreateRequest) -> ApiRespons
         allowed = []
     allowed_lower = [d.lower() for d in allowed]
 
+    # Convert rounds info to storage format
+    rounds_data = [
+        {
+            "roundNumber": idx + 1,
+            "name": r.name,
+            "description": r.description,
+            "selectedStudents": [],
+            "uploadedAt": None,
+            "uploadedBy": None,
+        }
+        for idx, r in enumerate(payload.rounds or [])
+    ]
+
     await _placements.create(
         {
             "staffEmail": str(payload.staffEmail),
@@ -812,6 +857,7 @@ async def create_placement_notice(payload: PlacementCreateRequest) -> ApiRespons
             "minCgpa": float(payload.minCgpa) if payload.minCgpa is not None else None,
             "maxArrears": int(payload.maxArrears) if payload.maxArrears is not None else None,
             "resources": [r.model_dump() for r in (payload.resources or [])],
+            "rounds": rounds_data,
             "createdAt": datetime.now(timezone.utc),
         }
     )
@@ -989,6 +1035,337 @@ async def export_eligible_students_csv(
         iter([csv_bytes]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
+    )
+
+
+@app.post("/placements/{notice_id}/round/{round_number}/upload-students", response_model=ApiResponse)
+async def upload_round_students(
+    notice_id: str,
+    round_number: int,
+    email: str = Query(...),
+    role: UserRole = Query("management"),
+    file: UploadFile = File(...),
+) -> ApiResponse:
+    """Upload CSV/Excel file with student emails or roll numbers for a specific round."""
+    if not _is_allowed_domain(email):
+        return ApiResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
+    if not mongodb_ok() or _placements is None or _user_repo is None:
+        return ApiResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+    try:
+        _require_role(role, "management")
+    except ValueError as e:
+        return ApiResponse(success=False, message=str(e))
+
+    notice = await _placements.get_by_id(notice_id)
+    if notice is None:
+        return ApiResponse(success=False, message="Placement notice not found.")
+
+    staff_email = str(notice.get("staffEmail") or "").strip().lower()
+    if staff_email != email.strip().lower():
+        return ApiResponse(success=False, message="You can only upload students for your own placements.")
+
+    # Read the uploaded file
+    content = await file.read()
+    if not content:
+        return ApiResponse(success=False, message="Empty file uploaded.")
+
+    filename = (file.filename or "").lower()
+    student_identifiers: list[str] = []
+
+    # Handle Excel files (.xlsx, .xls)
+    if filename.endswith((".xlsx", ".xls")):
+        if openpyxl is None:
+            return ApiResponse(success=False, message="Excel support not available. Install openpyxl and restart the server.")
+        
+        try:
+            workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            sheet = workbook.active
+            
+            # Read first row and first column to detect orientation
+            headers_row = []
+            for cell in sheet[1]:
+                if cell.value:
+                    headers_row.append(str(cell.value).strip())
+            
+            headers_col = []
+            for row in sheet.iter_rows(min_row=1, max_col=1, values_only=True):
+                if row and row[0]:
+                    headers_col.append(str(row[0]).strip())
+            
+            # Determine if data is transposed
+            is_transposed = False
+            if len(headers_col) >= len(headers_row):
+                # Check if first column contains header-like values
+                col_headers_lower = [h.lower().strip() for h in headers_col[:10]]
+                has_expected_headers = any(
+                    h in col_headers_lower 
+                    for h in ["email", "student_email", "roll_number", "rollnumber", "name", "student_name"]
+                )
+                if has_expected_headers:
+                    is_transposed = True
+            
+            if is_transposed:
+                # Transposed format: headers in first column, data in rows to the right
+                header_to_row = {}
+                for row_idx, row in enumerate(sheet.iter_rows(min_row=1, values_only=True), start=1):
+                    if row and row[0]:
+                        header_name = str(row[0]).strip().lower()
+                        header_to_row[header_name] = row_idx
+                
+                # Find which row contains email, roll_number, or name
+                email_row = None
+                rollno_row = None
+                name_row = None
+                
+                for h, row_idx in header_to_row.items():
+                    if h in ["email", "student_email", "studentemail", "e-mail"]:
+                        email_row = row_idx
+                    elif h in ["roll_number", "rollnumber", "roll_no", "rollno", "roll"]:
+                        rollno_row = row_idx
+                    elif h in ["name", "student_name", "studentname", "full_name"]:
+                        name_row = row_idx
+                
+                # Read data from columns (starting from column 2)
+                max_col = sheet.max_column
+                for col_idx in range(2, max_col + 1):
+                    identifier = None
+                    
+                    if email_row:
+                        cell_value = sheet.cell(row=email_row, column=col_idx).value
+                        if cell_value:
+                            identifier = str(cell_value).strip().lower()
+                    elif rollno_row:
+                        cell_value = sheet.cell(row=rollno_row, column=col_idx).value
+                        if cell_value:
+                            identifier = str(cell_value).strip()
+                    elif name_row:
+                        cell_value = sheet.cell(row=name_row, column=col_idx).value
+                        if cell_value:
+                            identifier = str(cell_value).strip()
+                    
+                    if identifier:
+                        student_identifiers.append(identifier)
+            
+            else:
+                # Normal format: headers in first row, data in rows below
+                headers = headers_row
+                
+                if not headers:
+                    return ApiResponse(success=False, message="Excel file has no headers in the first row.")
+                
+                # Find column indices
+                email_col_idx = None
+                rollno_col_idx = None
+                name_col_idx = None
+                
+                for idx, h in enumerate(headers):
+                    h_lower = h.lower().strip()
+                    if h_lower in ["email", "student_email", "studentemail", "e-mail"]:
+                        email_col_idx = idx
+                    elif h_lower in ["roll_number", "rollnumber", "roll_no", "rollno", "roll"]:
+                        rollno_col_idx = idx
+                    elif h_lower in ["name", "student_name", "studentname", "full_name"]:
+                        name_col_idx = idx
+                
+                # Read data rows (skip header row)
+                for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                    if not row or all(cell is None or str(cell).strip() == "" for cell in row):
+                        continue
+                    
+                    identifier = None
+                    if email_col_idx is not None and len(row) > email_col_idx and row[email_col_idx]:
+                        identifier = str(row[email_col_idx]).strip().lower()
+                    elif rollno_col_idx is not None and len(row) > rollno_col_idx and row[rollno_col_idx]:
+                        identifier = str(row[rollno_col_idx]).strip()
+                    elif name_col_idx is not None and len(row) > name_col_idx and row[name_col_idx]:
+                        identifier = str(row[name_col_idx]).strip()
+                    
+                    if identifier:
+                        student_identifiers.append(identifier)
+            
+            workbook.close()
+        
+        except Exception as e:
+            return ApiResponse(success=False, message=f"Failed to parse Excel file: {str(e)}")
+    
+    # Handle CSV files
+    else:
+        try:
+            text = content.decode("utf-8-sig")  # Handle BOM
+        except UnicodeDecodeError:
+            try:
+                text = content.decode("latin-1")
+            except Exception:
+                return ApiResponse(success=False, message="Could not decode file. Please ensure it's UTF-8 CSV or Excel format.")
+
+        # Parse CSV with proper newline handling
+        try:
+            # Use StringIO with newline parameter to handle embedded newlines properly
+            reader = csv.DictReader(io.StringIO(text, newline=''))
+            headers = reader.fieldnames or []
+            
+            # Look for common column names (case-insensitive)
+            email_col = None
+            rollno_col = None
+            name_col = None
+            
+            for h in headers:
+                h_lower = h.lower().strip()
+                if h_lower in ["email", "student_email", "studentemail", "e-mail"]:
+                    email_col = h
+                elif h_lower in ["roll_number", "rollnumber", "roll_no", "rollno", "roll"]:
+                    rollno_col = h
+                elif h_lower in ["name", "student_name", "studentname", "full_name"]:
+                    name_col = h
+
+            for row in reader:
+                # Try email first, then roll number
+                identifier = None
+                if email_col and row.get(email_col):
+                    val = row[email_col].strip()
+                    # Remove any newlines or extra whitespace
+                    val = " ".join(val.split())
+                    identifier = val.lower()
+                elif rollno_col and row.get(rollno_col):
+                    val = row[rollno_col].strip()
+                    val = " ".join(val.split())
+                    identifier = val
+                elif name_col and row.get(name_col):
+                    val = row[name_col].strip()
+                    val = " ".join(val.split())
+                    identifier = val
+                
+                if identifier:
+                    student_identifiers.append(identifier)
+
+        except Exception as e:
+            return ApiResponse(success=False, message=f"Failed to parse CSV: {str(e)}")
+
+    if not student_identifiers:
+        return ApiResponse(success=False, message="No valid student identifiers found in file. Expected columns: email, roll_number, or name.")
+
+    # Match students in database
+    student_emails: list[str] = []
+    not_found: list[str] = []
+    
+    for identifier in student_identifiers:
+        # Check if it's already an email
+        if "@" in identifier:
+            student = await _user_repo.find_public_by_email_and_role(identifier, "student")
+            if student:
+                student_emails.append(identifier)
+            else:
+                not_found.append(identifier)
+        else:
+            # Search by roll number or name
+            users_col = _user_repo.col
+            query = {
+                "$and": [
+                    {"$or": [{"role": "student"}, {"role": {"$exists": False}}]},
+                    {"$or": [
+                        {"profile.roll_number": identifier},
+                        {"name": {"$regex": f"^{identifier}$", "$options": "i"}},
+                    ]},
+                ]
+            }
+            student = await users_col.find_one(query, {"email": 1})
+            if student:
+                student_emails.append(student.get("email"))
+            else:
+                not_found.append(identifier)
+
+    if not student_emails:
+        return ApiResponse(success=False, message=f"No students found matching the uploaded data. Unmatched: {', '.join(not_found[:5])}")
+
+    # Update the round with selected students
+    rounds = notice.get("rounds") or []
+    round_found = False
+    
+    for r in rounds:
+        if r.get("roundNumber") == round_number:
+            r["selectedStudents"] = student_emails
+            r["uploadedAt"] = _iso(datetime.now(timezone.utc))
+            r["uploadedBy"] = email
+            round_found = True
+            break
+    
+    if not round_found:
+        return ApiResponse(success=False, message=f"Round {round_number} not found in this placement.")
+
+    # Update the placement
+    await _placements.col.update_one(
+        {"_id": ObjectId(notice_id)},
+        {"$set": {"rounds": rounds}}
+    )
+
+    # Send notifications to selected students
+    company_name = notice.get("companyName", "")
+    placement_title = notice.get("title", "")
+    round_info = next((r for r in rounds if r.get("roundNumber") == round_number), None)
+    round_name = round_info.get("name", f"Round {round_number}") if round_info else f"Round {round_number}"
+
+    # Send emails asynchronously (non-blocking)
+    for student_email in student_emails:
+        try:
+            await anyio.to_thread.run_sync(
+                notify_placement_round_selection,
+                student_email,
+                company_name,
+                placement_title,
+                round_number,
+                round_name,
+            )
+        except Exception:
+            pass  # Continue even if email fails
+
+    message = f"Successfully uploaded {len(student_emails)} students for {round_name}."
+    if not_found:
+        message += f" Could not match {len(not_found)} identifiers."
+    
+    return ApiResponse(success=True, message=message)
+
+
+@app.get("/placements/my-selections/{email}", response_model=StudentPlacementStatusResponse)
+async def get_my_placement_selections(
+    email: str,
+    role: UserRole = Query("student"),
+) -> StudentPlacementStatusResponse:
+    """Get all rounds where this student has been selected."""
+    if not _is_allowed_domain(email):
+        return StudentPlacementStatusResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
+    if not mongodb_ok() or _placements is None:
+        return StudentPlacementStatusResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+    try:
+        _require_role(role, "student")
+    except ValueError as e:
+        return StudentPlacementStatusResponse(success=False, message=str(e))
+
+    # Find all placements where student is in any round
+    placements = _placements.col.find({"rounds.selectedStudents": email.lower()})
+    
+    selections: list[StudentRoundStatus] = []
+    async for placement in placements:
+        placement_id = _doc_id(placement)
+        company_name = placement.get("companyName", "")
+        title = placement.get("title", "")
+        
+        for r in placement.get("rounds", []):
+            if email.lower() in [s.lower() for s in r.get("selectedStudents", [])]:
+                selections.append(
+                    StudentRoundStatus(
+                        placementId=placement_id,
+                        companyName=company_name,
+                        title=title,
+                        roundNumber=r.get("roundNumber", 0),
+                        roundName=r.get("name", ""),
+                        notifiedAt=r.get("uploadedAt", ""),
+                    )
+                )
+    
+    return StudentPlacementStatusResponse(
+        success=True,
+        message=f"Found {len(selections)} round selection(s).",
+        selections=selections,
     )
 
 
@@ -1193,6 +1570,11 @@ async def create_event(payload: EventCreateRequest) -> EventCreateResponse:
     if mgr is None:
         return EventCreateResponse(success=False, message="Event manager user not found.")
 
+    # Check for duplicate event title
+    title_exists = await _events.exists_by_title_and_manager(payload.title, str(payload.managerEmail))
+    if title_exists:
+        return EventCreateResponse(success=False, message=f"You already have an event with the title '{payload.title}'. Please use a different title.")
+
     try:
         start_dt = _parse_dt(payload.startAt)
         end_dt = _parse_dt(payload.endAt) if payload.endAt else None
@@ -1278,6 +1660,132 @@ async def list_visible_events(
 
     docs = await _events.list_visible_for_department(dept, limit=int(limit))
     return EventListResponse(success=True, message="ok", events=[_to_event_item(d) for d in docs])
+
+
+@app.put("/events/{event_id}", response_model=ApiResponse)
+async def update_event(
+    event_id: str,
+    payload: EventCreateRequest,
+) -> ApiResponse:
+    if not _is_allowed_domain(str(payload.managerEmail)):
+        return ApiResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
+    if not mongodb_ok() or _events is None:
+        return ApiResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+
+    try:
+        _require_role(payload.role, "event_manager")
+    except ValueError as e:
+        return ApiResponse(success=False, message=str(e))
+
+    # Check if event exists and belongs to this manager
+    event = await _events.get_by_id(event_id)
+    if event is None:
+        return ApiResponse(success=False, message="Event not found.")
+    if event.get("managerEmail") != str(payload.managerEmail):
+        return ApiResponse(success=False, message="You can only update your own events.")
+
+    # Check for duplicate title (excluding current event)
+    title_exists = await _events.exists_by_title_and_manager(payload.title, str(payload.managerEmail), exclude_id=event_id)
+    if title_exists:
+        return ApiResponse(success=False, message=f"You already have another event with the title '{payload.title}'. Please use a different title.")
+
+    try:
+        start_dt = _parse_dt(payload.startAt)
+        end_dt = _parse_dt(payload.endAt) if payload.endAt else None
+        if end_dt and end_dt < start_dt:
+            return ApiResponse(success=False, message="endAt must be after startAt.")
+    except ValueError:
+        return ApiResponse(success=False, message="Invalid startAt/endAt datetime. Use ISO format.")
+
+    # Normalize departments
+    allowed = [d.strip() for d in (payload.allowedDepartments or []) if str(d).strip()]
+    if any(d.strip().lower() in {"all", "*"} for d in allowed):
+        allowed = []
+    allowed_lower = [d.lower() for d in allowed]
+
+    # Validate form fields
+    fields = payload.formFields or []
+    seen_keys: set[str] = set()
+    for f in fields:
+        key = str(f.key)
+        if key in seen_keys:
+            return ApiResponse(success=False, message=f"Duplicate form field key: {key}")
+        seen_keys.add(key)
+        if f.type == "select" and not (f.options and len(f.options) > 0):
+            return ApiResponse(success=False, message=f"Field '{key}' is select but has no options.")
+
+    updates = {
+        "title": payload.title,
+        "description": payload.description,
+        "venue": payload.venue,
+        "startAt": start_dt,
+        "endAt": end_dt,
+        "allowedDepartments": allowed,
+        "allowedDepartmentsLower": allowed_lower,
+        "formFields": [f.model_dump() for f in fields],
+        "updatedAt": datetime.now(timezone.utc),
+    }
+
+    ok = await _events.update_event(event_id, str(payload.managerEmail), updates)
+    if not ok:
+        return ApiResponse(success=False, message="Failed to update event.")
+    return ApiResponse(success=True, message="Event updated successfully.")
+
+
+@app.put("/events/{event_id}/poster", response_model=ApiResponse)
+async def update_event_poster(
+    event_id: str,
+    email: str,
+    role: UserRole = "event_manager",
+    file: UploadFile = File(...),
+) -> ApiResponse:
+    if not _is_allowed_domain(email):
+        return ApiResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
+    if not mongodb_ok() or _events is None:
+        return ApiResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+    try:
+        _require_role(role, "event_manager")
+    except ValueError as e:
+        return ApiResponse(success=False, message=str(e))
+
+    if file.filename is None or not file.filename.strip():
+        return ApiResponse(success=False, message="Invalid filename.")
+
+    original = Path(file.filename).name
+    ext = Path(original).suffix.lower()
+    allowed_ext = {".png", ".jpg", ".jpeg"}
+    if ext not in allowed_ext:
+        return ApiResponse(success=False, message="Only PNG/JPG/JPEG posters are allowed.")
+
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        return ApiResponse(success=False, message="Poster too large (max 5MB).")
+
+    # Delete old poster if exists
+    event = await _events.get_by_id(event_id)
+    if event and event.get("poster") and event["poster"].get("storedName"):
+        old_poster = _EVENT_POSTERS_DIR / event["poster"]["storedName"]
+        if old_poster.exists():
+            old_poster.unlink()
+
+    token = secrets.token_hex(8)
+    stored = f"event_{event_id}_{token}{ext}".replace("/", "_").replace("\\", "_")
+    dest = _EVENT_POSTERS_DIR / stored
+    dest.write_bytes(data)
+
+    poster_meta = {
+        "originalName": original,
+        "storedName": stored,
+        "contentType": file.content_type or "image/jpeg",
+        "size": len(data),
+        "uploadedAt": datetime.now(timezone.utc).isoformat(),
+        "url": f"/uploads/event_posters/{stored}",
+    }
+
+    ok = await _events.set_poster(event_id, email, poster_meta)
+    if not ok:
+        return ApiResponse(success=False, message="Event not found or not owned by this manager.")
+    return ApiResponse(success=True, message="Poster updated successfully.")
 
 
 @app.post("/events/{event_id}/poster", response_model=ApiResponse)
@@ -1499,6 +2007,39 @@ async def create_alumni_post(payload: AlumniPostCreateRequest) -> ApiResponse:
         }
     )
     return ApiResponse(success=True, message="Post created.")
+
+
+@app.put("/alumni/posts/{post_id}", response_model=ApiResponse)
+async def update_alumni_post(post_id: str, payload: AlumniPostCreateRequest) -> ApiResponse:
+    if not _is_allowed_domain(str(payload.alumniEmail)):
+        return ApiResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
+    if not mongodb_ok() or _alumni_posts is None:
+        return ApiResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+
+    try:
+        _require_role(payload.role, "alumni")
+    except ValueError as e:
+        return ApiResponse(success=False, message=str(e))
+
+    # Check if post exists and belongs to this alumni
+    post = await _alumni_posts.get_by_id(post_id)
+    if post is None:
+        return ApiResponse(success=False, message="Post not found.")
+    if post.get("alumniEmail") != str(payload.alumniEmail):
+        return ApiResponse(success=False, message="You can only update your own posts.")
+
+    updates = {
+        "title": payload.title,
+        "description": payload.description,
+        "tags": payload.tags,
+        "link": str(payload.link) if payload.link else None,
+        "updatedAt": datetime.now(timezone.utc),
+    }
+
+    ok = await _alumni_posts.update_post(post_id, str(payload.alumniEmail), updates)
+    if not ok:
+        return ApiResponse(success=False, message="Failed to update post.")
+    return ApiResponse(success=True, message="Post updated successfully.")
 
 
 @app.post("/referrals/request", response_model=ApiResponse)
@@ -1758,3 +2299,83 @@ async def chat_send(payload: ChatSendRequest) -> ApiResponse:
         str(payload.senderEmail),
     )
     return ApiResponse(success=True, message=thread_id)
+
+
+def _to_placement_experience_item(doc: dict) -> PlacementExperienceItem:
+    return PlacementExperienceItem(
+        id=str(doc["_id"]),
+        studentEmail=str(doc.get("studentEmail", "")),
+        studentName=doc.get("studentName"),
+        studentDepartment=doc.get("studentDepartment"),
+        companyName=str(doc.get("companyName", "")),
+        jobRole=str(doc.get("jobRole", "")),
+        interviewDate=str(doc.get("interviewDate", "")),
+        rounds=doc.get("rounds", []),
+        difficultyLevel=int(doc.get("difficultyLevel", 1)),
+        overallExperience=str(doc.get("overallExperience", "")),
+        createdAt=doc.get("createdAt", datetime.now(timezone.utc)).isoformat(),
+    )
+
+
+@app.post("/api/experiences", response_model=ApiResponse)
+async def create_placement_experience(payload: PlacementExperienceCreateRequest) -> ApiResponse:
+    if not _is_allowed_domain(str(payload.studentEmail)):
+        return ApiResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
+    if not mongodb_ok() or _placement_experiences is None or _user_repo is None:
+        return ApiResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+
+    try:
+        _require_role(payload.studentRole, "student")
+    except ValueError as e:
+        return ApiResponse(success=False, message=str(e))
+
+    student = await _user_repo.find_public_by_email_and_role(str(payload.studentEmail), "student")
+    if student is None:
+        return ApiResponse(success=False, message="Student not found.")
+
+    # Get student name and department for display
+    student_name = student.get("name", "")
+    student_dept = student.get("department", "")
+
+    await _placement_experiences.create(
+        {
+            "studentEmail": str(payload.studentEmail),
+            "studentName": student_name,
+            "studentDepartment": student_dept,
+            "companyName": payload.companyName,
+            "jobRole": payload.jobRole,
+            "interviewDate": payload.interviewDate,
+            "rounds": [r.model_dump() for r in payload.rounds],
+            "difficultyLevel": payload.difficultyLevel,
+            "overallExperience": payload.overallExperience,
+            "createdAt": datetime.now(timezone.utc),
+        }
+    )
+    return ApiResponse(success=True, message="Placement experience submitted successfully!")
+
+
+@app.get("/api/experiences/{company_name}", response_model=PlacementExperienceListResponse)
+async def get_experiences_by_company(company_name: str, limit: int = Query(default=50, ge=1, le=200)) -> PlacementExperienceListResponse:
+    if not mongodb_ok() or _placement_experiences is None:
+        return PlacementExperienceListResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+
+    docs = await _placement_experiences.list_by_company(company_name, limit=int(limit))
+    return PlacementExperienceListResponse(
+        success=True,
+        message="ok",
+        experiences=[_to_placement_experience_item(d) for d in docs],
+    )
+
+
+@app.get("/api/experiences", response_model=PlacementExperienceListResponse)
+async def list_all_experiences(limit: int = Query(default=100, ge=1, le=200)) -> PlacementExperienceListResponse:
+    if not mongodb_ok() or _placement_experiences is None:
+        return PlacementExperienceListResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
+
+    docs = await _placement_experiences.list_all(limit=int(limit))
+    return PlacementExperienceListResponse(
+        success=True,
+        message="ok",
+        experiences=[_to_placement_experience_item(d) for d in docs],
+    )
+

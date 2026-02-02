@@ -52,6 +52,45 @@ class VerifiedEmailRepository:
         return doc is not None
 
 
+class StudentEmailRepository:
+    """Repository for checking valid student emails from kec_hub.sheet1 collection"""
+    def __init__(self, db: AsyncIOMotorDatabase):
+        # db here should be the kec_hub database with sheet1 containing 7888 student emails
+        self.col = db["sheet1"]
+        self.db = db  # Store reference for debugging
+        print(f"[REPO] StudentEmailRepository initialized with database: {db.name}")
+
+    async def ensure_indexes(self) -> None:
+        # Create index on Email ID field for faster lookups
+        await self.col.create_index("Email ID")
+
+    async def has_data(self) -> bool:
+        """Check if the collection has any documents (email validation data loaded)."""
+        try:
+            count = await self.col.count_documents({}, limit=1)
+            print(f"[REPO] has_data() check - Database: {self.db.name}, Collection: sheet1, Count: {count}")
+            return count > 0
+        except Exception as e:
+            print(f"[REPO] has_data() error: {e}")
+            return False
+
+    async def is_valid_student_email(self, email: str) -> bool:
+        """Check if email exists in the kec_hub.sheet1 student database"""
+        try:
+            doc = await self.col.find_one({"Email ID": email})
+            print(f"[REPO] is_valid_student_email({email}) - Found: {doc is not None}")
+            if doc:
+                print(f"[REPO] Student record: Name={doc.get('Name')}, Roll No={doc.get('Roll No')}")
+            return doc is not None
+        except Exception as e:
+            print(f"[REPO] is_valid_student_email error: {e}")
+            return False
+    
+    async def get_student_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """Get student details by email"""
+        return await self.col.find_one({"Email ID": email})
+
+
 class UserRepository:
     def __init__(self, db: AsyncIOMotorDatabase):
         self.col = db["users"]
@@ -141,6 +180,14 @@ class AlumniPostRepository:
             return None
         return await self.col.find_one({"_id": oid})
 
+    async def update_post(self, post_id: str, alumni_email: str, updates: Dict[str, Any]) -> bool:
+        try:
+            oid = ObjectId(post_id)
+        except Exception:
+            return False
+        res = await self.col.update_one({"_id": oid, "alumniEmail": alumni_email}, {"$set": updates})
+        return bool(res.modified_count)
+
 
 class EventRepository:
     def __init__(self, db: AsyncIOMotorDatabase):
@@ -178,12 +225,31 @@ class EventRepository:
         cur = self.col.find(q, sort=[("startAt", 1), ("createdAt", -1)]).limit(int(limit))
         return [d async for d in cur]
 
+    async def exists_by_title_and_manager(self, title: str, manager_email: str, exclude_id: Optional[str] = None) -> bool:
+        query = {"title": title, "managerEmail": manager_email}
+        if exclude_id:
+            try:
+                oid = ObjectId(exclude_id)
+                query["_id"] = {"$ne": oid}
+            except Exception:
+                pass
+        doc = await self.col.find_one(query, {"_id": 1})
+        return doc is not None
+
     async def set_poster(self, event_id: str, manager_email: str, poster_meta: Dict[str, Any]) -> bool:
         try:
             oid = ObjectId(event_id)
         except Exception:
             return False
         res = await self.col.update_one({"_id": oid, "managerEmail": manager_email}, {"$set": {"poster": poster_meta}})
+        return bool(res.modified_count)
+
+    async def update_event(self, event_id: str, manager_email: str, updates: Dict[str, Any]) -> bool:
+        try:
+            oid = ObjectId(event_id)
+        except Exception:
+            return False
+        res = await self.col.update_one({"_id": oid, "managerEmail": manager_email}, {"$set": updates})
         return bool(res.modified_count)
 
 
@@ -457,3 +523,33 @@ class ChatMessageRepository:
     async def list_by_thread(self, thread_id: str, limit: int = 200) -> list[Dict[str, Any]]:
         cur = self.col.find({"threadId": thread_id}, sort=[("createdAt", 1)]).limit(int(limit))
         return [d async for d in cur]
+
+
+class PlacementExperienceRepository:
+    def __init__(self, db: AsyncIOMotorDatabase):
+        self.col = db["placement_experiences"]
+
+    async def ensure_indexes(self) -> None:
+        await self.col.create_index("companyName")
+        await self.col.create_index("studentEmail")
+        await self.col.create_index([("createdAt", -1)])
+
+    async def create(self, doc: Dict[str, Any]) -> str:
+        res = await self.col.insert_one(doc)
+        return str(res.inserted_id)
+
+    async def list_by_company(self, company_name: str, limit: int = 100) -> list[Dict[str, Any]]:
+        # Case-insensitive search
+        import re
+        pattern = re.compile(f"^{re.escape(company_name)}$", re.IGNORECASE)
+        cur = self.col.find({"companyName": pattern}).sort("createdAt", -1).limit(int(limit))
+        return [d async for d in cur]
+
+    async def list_all(self, limit: int = 100) -> list[Dict[str, Any]]:
+        cur = self.col.find({}).sort("createdAt", -1).limit(int(limit))
+        return [d async for d in cur]
+
+    async def list_by_student(self, student_email: str, limit: int = 50) -> list[Dict[str, Any]]:
+        cur = self.col.find({"studentEmail": student_email}).sort("createdAt", -1).limit(int(limit))
+        return [d async for d in cur]
+

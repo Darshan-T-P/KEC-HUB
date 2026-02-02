@@ -64,7 +64,13 @@ export default function StudentNotesPage({ user }: { user: User }) {
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ fontWeight: 700 }}>{it.title}</div>
-                <div style={{ color: "#666", fontSize: 12 }}>{new Date(it.createdAt).toLocaleString()}</div>
+                <div style={{ color: "#666", fontSize: 12 }}>{(() => {
+                  const d = new Date(it.createdAt);
+                  const day = String(d.getDate()).padStart(2, '0');
+                  const month = String(d.getMonth() + 1).padStart(2, '0');
+                  const year = d.getFullYear();
+                  return `${day}-${month}-${year}`;
+                })()}</div>
               </div>
 
               {it.description ? <div style={{ marginTop: 6, color: "#444" }}>{it.description}</div> : null}

@@ -23,7 +23,18 @@ const formatMaybeDate = (value?: string | null): string => {
   if (!v) return "";
   const dt = new Date(v);
   if (Number.isNaN(dt.getTime())) return v;
-  return dt.toLocaleString();
+  const day = String(dt.getDate()).padStart(2, '0');
+  const month = String(dt.getMonth() + 1).padStart(2, '0');
+  const year = dt.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+const getTodayString = (): string => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
@@ -50,6 +61,14 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
   const [resources, setResources] = useState<PlacementResourceItem[]>([]);
   const [resLabel, setResLabel] = useState("");
   const [resUrl, setResUrl] = useState("");
+
+  const [rounds, setRounds] = useState<Array<{ name: string; description: string }>>([]);
+  const [roundName, setRoundName] = useState("");
+  const [roundDesc, setRoundDesc] = useState("");
+
+  const [uploadingRound, setUploadingRound] = useState<{ noticeId: string; roundNumber: number } | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const sortedMine = useMemo(() => {
     return [...mine].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
@@ -84,6 +103,18 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
 
   const removeResource = (idx: number) => {
     setResources((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addRound = () => {
+    const name = roundName.trim();
+    if (!name) return;
+    setRounds((prev) => [...prev, { name, description: roundDesc.trim() }]);
+    setRoundName("");
+    setRoundDesc("");
+  };
+
+  const removeRound = (idx: number) => {
+    setRounds((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const resetForm = () => {
@@ -122,6 +153,7 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
       minCgpa: minCgpa.trim() ? Number(minCgpa) : undefined,
       maxArrears: maxArrears.trim() ? Number(maxArrears) : undefined,
       resources,
+      rounds,
     };
 
     setSaving(true);
@@ -134,6 +166,41 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
       setSuccessMsg(res.message || "Created.");
       resetForm();
       await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUploadStudents = (noticeId: string, roundNumber: number) => {
+    setError(null);
+    setSuccessMsg(null);
+    setUploadingRound({ noticeId, roundNumber });
+  };
+
+  const handleFileUpload = async () => {
+    if (!uploadFile || !uploadingRound) return;
+    
+    setError(null);
+    setSuccessMsg(null);
+    setSaving(true);
+
+    try {
+      const res = await placementService.uploadRoundStudents(
+        { email: user.email, role: user.role },
+        uploadingRound.noticeId,
+        uploadingRound.roundNumber,
+        uploadFile
+      );
+      
+      if (res.success) {
+        setSuccessMsg(res.message || "Students uploaded successfully");
+        setUploadFile(null);
+        setUploadingRound(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        await load();
+      } else {
+        setError(res.message || "Failed to upload students");
+      }
     } finally {
       setSaving(false);
     }
@@ -187,7 +254,7 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
 
       <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
         <h3 className="text-xl font-black text-slate-800">Create Notice</h3>
-        <p className="text-sm font-bold text-slate-500 mt-2">Use ISO strings for date/datetime (example: 2026-02-01 or 2026-02-01T09:00:00).</p>
+        <p className="text-sm font-bold text-slate-500 mt-2">Select dates using the calendar picker. Only current and future dates are allowed.</p>
 
         <form onSubmit={submit} className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-2">
@@ -212,12 +279,12 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
 
           <div className="space-y-2">
             <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Visit Date (optional)</label>
-            <input value={visitDate} onChange={(e) => setVisitDate(e.target.value)} placeholder="2026-02-10" className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 font-bold" />
+            <input type="date" min={getTodayString()} value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 font-bold" />
           </div>
 
           <div className="space-y-2">
             <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Application Deadline (optional)</label>
-            <input value={applicationDeadline} onChange={(e) => setApplicationDeadline(e.target.value)} placeholder="2026-02-07" className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 font-bold" />
+            <input type="date" min={getTodayString()} value={applicationDeadline} onChange={(e) => setApplicationDeadline(e.target.value)} className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50 font-bold" />
           </div>
 
           <div className="space-y-2">
@@ -299,6 +366,40 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
             )}
           </div>
 
+          <div className="lg:col-span-2 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+            <h4 className="text-sm font-black text-slate-800">Placement Rounds</h4>
+            <p className="text-xs font-bold text-slate-400 mt-1">Define the rounds for this placement. Students can be uploaded later for each round.</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Round Name</label>
+                <input value={roundName} onChange={(e) => setRoundName(e.target.value)} placeholder="e.g. Technical Interview" className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-white font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Description (optional)</label>
+                <div className="flex gap-3">
+                  <input value={roundDesc} onChange={(e) => setRoundDesc(e.target.value)} placeholder="e.g. Coding round"  className="flex-1 px-5 py-4 rounded-2xl border border-slate-200 bg-white font-bold" />
+                  <button type="button" onClick={addRound} className="px-6 py-4 bg-slate-900 text-white font-black rounded-2xl text-sm hover:bg-slate-800 transition-all">Add</button>
+                </div>
+              </div>
+            </div>
+
+            {rounds.length ? (
+              <div className="mt-5 grid gap-2">
+                {rounds.map((r, idx) => (
+                  <div key={`round-${idx}`} className="flex items-center justify-between gap-3 px-5 py-3 rounded-2xl border border-slate-100 bg-white">
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-slate-800">Round {idx + 1}: {r.name}</p>
+                      {r.description ? <p className="text-xs font-bold text-slate-500">{r.description}</p> : null}
+                    </div>
+                    <button type="button" onClick={() => removeRound(idx)} className="px-4 py-2 text-xs font-black bg-rose-50 text-rose-700 rounded-xl border border-rose-100 hover:bg-rose-100">Remove</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs font-bold text-slate-400 mt-4">No rounds added. Students will see this as a single-round placement.</p>
+            )}
+          </div>
+
           <div className="lg:col-span-2 flex items-center justify-end gap-3">
             <button type="button" onClick={resetForm} className="px-6 py-4 bg-slate-100 text-slate-700 font-black rounded-2xl text-sm hover:bg-slate-200 transition-all">
               Clear
@@ -365,6 +466,48 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
                   )}
                 </div>
 
+                {n.rounds && n.rounds.length > 0 && (
+                  <div className="mt-5">
+                    <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Rounds ({n.rounds.length})</p>
+                    <div className="space-y-2">
+                      {n.rounds.map((round) => (
+                        <div key={round.roundNumber} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-black text-slate-800">
+                                Round {round.roundNumber}: {round.name}
+                              </p>
+                              {round.description && (
+                                <p className="text-xs font-bold text-slate-500 mt-1">{round.description}</p>
+                              )}
+                              <p className="text-xs font-bold text-slate-600 mt-2">
+                                {round.selectedStudents?.length || 0} student(s) selected
+                              </p>
+                              {round.uploadedAt && (
+                                <p className="text-[10px] font-bold text-slate-400 mt-1">
+                                  Uploaded: {(() => {
+                                    const d = new Date(round.uploadedAt);
+                                    const day = String(d.getDate()).padStart(2, '0');
+                                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                                    const year = d.getFullYear();
+                                    return `${day}-${month}-${year}`;
+                                  })()}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleUploadStudents(n.id, round.roundNumber)}
+                              className="px-4 py-2 bg-indigo-600 text-white font-black rounded-xl text-xs hover:bg-indigo-700 transition-all shrink-0"
+                            >
+                              Upload CSV
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-sm font-bold text-slate-700 mt-4 whitespace-pre-wrap">{(n.description || "").slice(0, 280)}{(n.description || "").length > 280 ? "…" : ""}</p>
 
                 <div className="mt-5 flex items-center justify-between">
@@ -392,6 +535,69 @@ const ManagementPlacementsPage: React.FC<Props> = ({ user }) => {
           </div>
         )}
       </section>
+
+      {uploadingRound && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-2xl w-full p-8">
+            <h3 className="text-2xl font-black text-slate-800">Upload Students for Round</h3>
+            <p className="text-sm font-bold text-slate-500 mt-2">
+              Upload a CSV file with student identifiers. Supported columns: email, roll_number, or name.
+            </p>
+
+            <div className="mt-6 space-y-4">
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-6 py-4 bg-slate-900 text-white font-black rounded-2xl text-sm hover:bg-slate-800 transition-all"
+                  >
+                    {uploadFile ? "Change file" : "Choose CSV/Excel file"}
+                  </button>
+
+                  <div className="flex-1 px-4 py-4 rounded-2xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700 break-all">
+                    {uploadFile ? uploadFile.name : "No file selected"}
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="p-4 rounded-2xl border bg-rose-50 border-rose-100 text-rose-700 font-bold text-sm">{error}</div>
+              )}
+
+              {successMsg && (
+                <div className="p-4 rounded-2xl border bg-emerald-50 border-emerald-100 text-emerald-700 font-bold text-sm">{successMsg}</div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setUploadingRound(null);
+                    setUploadFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="px-6 py-4 bg-slate-100 text-slate-700 font-black rounded-2xl text-sm hover:bg-slate-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleFileUpload}
+                  disabled={!uploadFile || saving}
+                  className="px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl text-sm shadow-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
+                >
+                  {saving ? "Uploading..." : "Upload & Notify Students"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

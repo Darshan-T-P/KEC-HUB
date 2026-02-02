@@ -111,3 +111,41 @@ Open the app to chat and continue.
         return
 
     raise ValueError(f"Unknown NOTIFY_PROVIDER: {settings.notify_provider}")
+
+
+def notify_placement_round_selection(
+    to_email: str,
+    company_name: str,
+    placement_title: str,
+    round_number: int,
+    round_name: str,
+) -> None:
+    subject = f"Selected for {company_name} - {round_name}"
+    body = (
+        """
+Congratulations! You have been selected for a placement round.
+
+Company: {company_name}
+Position: {placement_title}
+Round: {round_name} (Round {round_number})
+
+Please check the Placements section in KEC Opportunities Hub for more details and further instructions.
+
+Best of luck!
+""".strip().format(
+            company_name=company_name,
+            placement_title=placement_title,
+            round_number=round_number,
+            round_name=round_name,
+        )
+    )
+
+    provider = (settings.notify_provider or "console").lower()
+    if provider == "console":
+        print(f"[NOTIFY] To={to_email} Subject={subject}\n{body}")
+        return
+    if provider == "smtp":
+        _send_email(subject, to_email, body)
+        return
+
+    raise ValueError(f"Unknown NOTIFY_PROVIDER: {settings.notify_provider}")
