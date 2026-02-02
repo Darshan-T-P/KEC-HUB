@@ -113,15 +113,6 @@ class UserRepository:
         await self.col.update_one(self._role_filter(email, role), {"$set": core_update})
         return await self.find_public_by_email_and_role(email, role)
 
-    async def find_by_roll_number(self, roll_number: str) -> Optional[Dict[str, Any]]:
-        return await self.col.find_one({"profile.roll_number": roll_number, "role": "student"})
-
-    async def find_by_roll_number_case_insensitive(self, roll_number: str) -> Optional[Dict[str, Any]]:
-        import re
-        pattern = re.compile(f"^{re.escape(roll_number)}$", re.IGNORECASE)
-        # Search across all roles as alumni/staff might also have roll numbers
-        return await self.col.find_one({"profile.roll_number": pattern})
-
 
 class AlumniPostRepository:
     def __init__(self, db: AsyncIOMotorDatabase):
@@ -209,21 +200,6 @@ class EventRegistrationRepository:
         doc = await self.col.find_one({"eventId": event_id, "studentEmail": student_email}, {"_id": 1})
         return doc is not None
 
-    async def get_one(self, event_id: ObjectId, student_email: str) -> Optional[Dict[str, Any]]:
-        return await self.col.find_one({"eventId": event_id, "studentEmail": student_email})
-
-    async def find_by_any_answer_value(self, event_id: ObjectId, value: str) -> Optional[Dict[str, Any]]:
-        # Fallback for when student hasn't set roll number in profile
-        # We search all registrations for this event to see if any answer matches the identifier
-        cur = self.col.find({"eventId": event_id})
-        v_lower = value.strip().lower()
-        async for reg in cur:
-            answers = reg.get("answers") or {}
-            for val in answers.values():
-                if str(val).strip().lower() == v_lower:
-                    return reg
-        return None
-
     async def create(self, doc: Dict[str, Any]) -> str:
         res = await self.col.insert_one(doc)
         return str(res.inserted_id)
@@ -231,17 +207,6 @@ class EventRegistrationRepository:
     async def list_by_event(self, event_id: ObjectId, limit: int = 300) -> list[Dict[str, Any]]:
         cur = self.col.find({"eventId": event_id}, sort=[("createdAt", -1)]).limit(int(limit))
         return [d async for d in cur]
-
-    async def list_by_student(self, student_email: str, limit: int = 100) -> list[Dict[str, Any]]:
-        cur = self.col.find({"studentEmail": student_email}, sort=[("createdAt", -1)]).limit(int(limit))
-        return [d async for d in cur]
-
-    async def mark_attendance(self, event_id: ObjectId, student_email: str) -> bool:
-        res = await self.col.update_one(
-            {"eventId": event_id, "studentEmail": student_email},
-            {"$set": {"isPresent": True, "attendedAt": utc_now()}}
-        )
-        return bool(res.modified_count)
 
 
 class ReferralRepository:
@@ -357,20 +322,25 @@ class PlacementRepository:
             ]
         }
 
-        # Eligibility rules.
-        cgpa_filter = {"$or": [{"minCgpa": {"$exists": False}}, {"minCgpa": None}]}
+        # Eligibility rules. If notice has a constraint and student does not have the field,
+        # treat as not eligible (safer).
+        cgpa_filter: Dict[str, Any] = {
+            "$or": [
+                {"minCgpa": {"$exists": False}},
+                {"minCgpa": None},
+            ]
+        }
         if student_cgpa is not None:
             cgpa_filter["$or"].append({"minCgpa": {"$lte": float(student_cgpa)}})
-        else:
-            # Show everything if profile is incomplete
-            cgpa_filter["$or"].append({"minCgpa": {"$exists": True}})
 
-        arrears_filter = {"$or": [{"maxArrears": {"$exists": False}}, {"maxArrears": None}]}
+        arrears_filter: Dict[str, Any] = {
+            "$or": [
+                {"maxArrears": {"$exists": False}},
+                {"maxArrears": None},
+            ]
+        }
         if student_arrears is not None:
             arrears_filter["$or"].append({"maxArrears": {"$gte": int(student_arrears)}})
-        else:
-            # Show everything if profile is incomplete
-            arrears_filter["$or"].append({"maxArrears": {"$exists": True}})
 
         q: Dict[str, Any] = {"$and": [dept_filter, cgpa_filter, arrears_filter]}
         cur = self.col.find(q, sort=[("createdAt", -1)]).limit(int(limit))

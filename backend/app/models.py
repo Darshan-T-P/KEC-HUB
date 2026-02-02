@@ -281,8 +281,6 @@ class PlacementItem(BaseModel):
     maxArrears: int | None = None
     resources: list[PlacementResourceItem] = Field(default_factory=list)
     createdAt: str
-    score: float = 0.0
-    reasons: list[str] = Field(default_factory=list)
 
 
 class PlacementListResponse(ApiResponse):
@@ -508,15 +506,7 @@ class EventRegistrationItem(BaseModel):
     studentEmail: EmailStr
     studentDepartment: str | None = None
     answers: dict[str, str] = Field(default_factory=dict)
-    isPresent: bool = False
-    attendedAt: str | None = None
     createdAt: str
-
-
-class EventAttendanceMarkRequest(BaseModel):
-    managerEmail: EmailStr
-    role: UserRole = "event_manager"
-    studentIdentifier: str # email or roll number
 
 
 class EventRegistrationsResponse(ApiResponse):

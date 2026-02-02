@@ -48,16 +48,8 @@ const AlumniPostsPage: React.FC<Props> = ({ user }) => {
       setError("Only alumni can create posts.");
       return;
     }
-    if (title.trim().length < 5) {
-      setError("Title must be at least 5 characters long");
-      return;
-    }
-    if (description.trim().length < 20) {
-      setError("Description must be at least 20 characters long");
-      return;
-    }
-    if (link.trim() && !link.trim().startsWith("http")) {
-      setError("Link must start with http:// or https://");
+    if (!title.trim() || !description.trim()) {
+      setError("Title and description are required.");
       return;
     }
 
