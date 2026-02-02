@@ -9,7 +9,7 @@ from passlib.context import CryptContext
 from passlib.exc import PasswordSizeError
 
 from .email_sender import send_email_otp
-from .database.repositories import OtpRepository, UserRepository, VerifiedEmailRepository, utc_now
+from .database.repositories import OtpRepository, UserRepository, VerifiedEmailRepository, AuthorizedEmailRepository, utc_now
 from .settings import settings
 
 # bcrypt has a 72-byte password limit; for better UX use pbkdf2_sha256 for new
@@ -30,12 +30,23 @@ def _as_utc_aware(dt: datetime) -> datetime:
 
 
 class AuthService:
-    def __init__(self, otp_repo: OtpRepository, verified_repo: VerifiedEmailRepository, user_repo: UserRepository):
+    def __init__(
+        self, 
+        otp_repo: OtpRepository, 
+        verified_repo: VerifiedEmailRepository, 
+        user_repo: UserRepository,
+        auth_email_repo: AuthorizedEmailRepository
+    ):
         self.otp_repo = otp_repo
         self.verified_repo = verified_repo
         self.user_repo = user_repo
+        self.auth_email_repo = auth_email_repo
 
     async def send_otp(self, email: str) -> Literal["console", "smtp"]:
+        # NEW: Check if the email is in the authorized sheet1 collection in kec_hub db
+        if not await self.auth_email_repo.is_authorized(email):
+            raise ValueError("user not found with the email")
+
         now = utc_now()
         existing = await self.otp_repo.get(email)
 
@@ -115,6 +126,9 @@ class AuthService:
         department: str = "Computer Science",
         role: str = "student",
     ) -> None:
+        if not await self.auth_email_repo.is_authorized(email):
+            raise ValueError("user not found with the email")
+
         if not await self.verified_repo.is_verified(email):
             raise ValueError("Email not verified. Please verify OTP before registering.")
 

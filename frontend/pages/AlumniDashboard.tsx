@@ -150,6 +150,19 @@ const AlumniDashboard: React.FC<AlumniDashboardProps> = ({
                 </div>
 
                 <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-indigo-200">
+                        <h4 className="font-black text-xl mb-3">AI Coach 🤖</h4>
+                        <p className="text-sm text-indigo-100 font-bold mb-6 leading-relaxed">
+                            Need help preparing students or for your own senior interviews? Try our AI Coach.
+                        </p>
+                        <button
+                            onClick={() => setActiveTab('ai-coach')}
+                            className="w-full py-4 bg-white text-indigo-600 font-black rounded-2xl text-sm shadow-xl hover:bg-indigo-50 transition-all active:scale-95"
+                        >
+                            Start Coaching
+                        </button>
+                    </div>
+
                     <div className="bg-white p-6 rounded-3xl border border-slate-100">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">

@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from .database.db import connect_mongodb, disconnect_mongodb, mongodb_ok
 from .settings import settings
 from .models import ApiResponse
-from .routers import auth, profile, student, alumni, management, events, chat, referrals, ml_feedback
+from .routers import auth, profile, student, alumni, management, events, chat, referrals, ml_feedback, ai_coach, ai_advantage, mgmt_ai
 
 app = FastAPI(title="KEC Opportunities Hub API")
 
@@ -47,3 +47,6 @@ app.include_router(events.router)
 app.include_router(chat.router)
 app.include_router(referrals.router)
 app.include_router(ml_feedback.router)
+app.include_router(ai_coach.router)
+app.include_router(ai_advantage.router)
+app.include_router(mgmt_ai.router)

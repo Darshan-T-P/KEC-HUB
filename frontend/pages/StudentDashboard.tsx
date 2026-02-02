@@ -17,6 +17,7 @@ interface StudentDashboardProps {
     handleLogout: () => void;
     groqBoostedCount: number;
     handleApply: (opp: Opportunity) => void;
+    setActiveTab: (tab: string) => void;
 }
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({
@@ -31,7 +32,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     interviews,
     handleLogout,
     groqBoostedCount,
-    handleApply
+    handleApply,
+    setActiveTab
 }) => {
     const stats = [
         { label: 'Live Discoveries', value: discoveredOpps.length, color: 'text-indigo-600', bg: 'bg-indigo-50', icon: '📡' },
@@ -214,10 +216,26 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-indigo-200">
                         <h4 className="font-black text-xl mb-3">AI Coach 🤖</h4>
                         <p className="text-sm text-indigo-100 font-bold mb-6 leading-relaxed">
-                            We found new technical roles in {user.department}. Start a specialized interview prep session?
+                            Need help with interviews? Start a specialized prep session based on your profile.
                         </p>
-                        <button className="w-full py-4 bg-white text-indigo-600 font-black rounded-2xl text-sm shadow-xl hover:bg-indigo-50 transition-all active:scale-95">
-                            Start Session
+                        <button
+                            onClick={() => setActiveTab('ai-coach')}
+                            className="w-full py-4 bg-white text-indigo-600 font-black rounded-2xl text-sm shadow-xl hover:bg-indigo-50 transition-all active:scale-95"
+                        >
+                            Start Coaching
+                        </button>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-purple-600 to-violet-800 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-purple-200">
+                        <h4 className="font-black text-xl mb-3">AI Advantage 🚀</h4>
+                        <p className="text-sm text-purple-100 font-bold mb-6 leading-relaxed">
+                            Generate strategic prep plans and professional cover letters for any role.
+                        </p>
+                        <button
+                            onClick={() => setActiveTab('ai-advantage')}
+                            className="w-full py-4 bg-white text-purple-600 font-black rounded-2xl text-sm shadow-xl hover:bg-purple-50 transition-all active:scale-95"
+                        >
+                            Boost Application
                         </button>
                     </div>
 

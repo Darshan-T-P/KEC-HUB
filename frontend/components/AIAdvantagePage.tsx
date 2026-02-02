@@ -3,6 +3,8 @@ import { User } from '../types';
 
 interface AIAdvantagePageProps {
   user: User;
+  initialRole?: string;
+  initialCompany?: string;
 }
 
 interface StrategicPrepResult {
@@ -37,13 +39,13 @@ interface CoverLetterResult {
   error?: string;
 }
 
-const AIAdvantagePage: React.FC<AIAdvantagePageProps> = ({ user }) => {
+const AIAdvantagePage: React.FC<AIAdvantagePageProps> = ({ user, initialRole = '', initialCompany = '' }) => {
   const [activeTab, setActiveTab] = useState<'strategic' | 'cover'>('strategic');
-  
+
   // Strategic Prep state
   const [loading, setLoading] = useState(false);
-  const [targetRole, setTargetRole] = useState('');
-  const [company, setCompany] = useState('');
+  const [targetRole, setTargetRole] = useState(initialRole);
+  const [company, setCompany] = useState(initialCompany);
   const [experienceLevel, setExperienceLevel] = useState<'entry-level' | 'mid-level' | 'senior'>('entry-level');
   const [strategicResult, setStrategicResult] = useState<StrategicPrepResult | null>(null);
 
@@ -156,21 +158,19 @@ const AIAdvantagePage: React.FC<AIAdvantagePageProps> = ({ user }) => {
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
           <button
             onClick={() => setActiveTab('strategic')}
-            className={`flex-1 py-3 px-4 sm:px-6 rounded-xl font-semibold transition text-sm sm:text-base ${
-              activeTab === 'strategic'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-            }`}
+            className={`flex-1 py-3 px-4 sm:px-6 rounded-xl font-semibold transition text-sm sm:text-base ${activeTab === 'strategic'
+              ? 'bg-blue-600 text-white shadow-lg'
+              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
           >
             Strategic Preparation
           </button>
           <button
             onClick={() => setActiveTab('cover')}
-            className={`flex-1 py-3 px-4 sm:px-6 rounded-xl font-semibold transition text-sm sm:text-base ${
-              activeTab === 'cover'
-                ? 'bg-purple-600 text-white shadow-lg'
-                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-            }`}
+            className={`flex-1 py-3 px-4 sm:px-6 rounded-xl font-semibold transition text-sm sm:text-base ${activeTab === 'cover'
+              ? 'bg-purple-600 text-white shadow-lg'
+              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
           >
             AI Cover Letter
           </button>
@@ -181,7 +181,7 @@ const AIAdvantagePage: React.FC<AIAdvantagePageProps> = ({ user }) => {
           <div className="space-y-4 sm:space-y-6">
             <div className="bg-gray-800 rounded-xl p-4 sm:p-6 shadow-xl border border-gray-700">
               <h2 className="text-lg sm:text-xl font-semibold mb-4 text-white">Generate Strategic Prep Plan</h2>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -218,11 +218,10 @@ const AIAdvantagePage: React.FC<AIAdvantagePageProps> = ({ user }) => {
                       <button
                         key={level}
                         onClick={() => setExperienceLevel(level)}
-                        className={`flex-1 py-2 px-3 sm:px-4 rounded-lg font-medium transition text-sm ${
-                          experienceLevel === level
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
+                        className={`flex-1 py-2 px-3 sm:px-4 rounded-lg font-medium transition text-sm ${experienceLevel === level
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
                       >
                         {level.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                       </button>
@@ -343,7 +342,7 @@ const AIAdvantagePage: React.FC<AIAdvantagePageProps> = ({ user }) => {
           <div className="space-y-4 sm:space-y-6">
             <div className="bg-gray-800 rounded-xl p-4 sm:p-6 shadow-xl border border-gray-700">
               <h2 className="text-lg sm:text-xl font-semibold mb-4 text-white">Generate AI Cover Letter</h2>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
