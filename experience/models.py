@@ -509,12 +509,39 @@ class EventRegistrationItem(BaseModel):
     createdAt: str
 
 
-class EventAttendanceMarkRequest(BaseModel):
-    managerEmail: EmailStr
-    role: UserRole = "event_manager"
-    studentIdentifier: str # email or roll number
-    status: bool = True
-
-
 class EventRegistrationsResponse(ApiResponse):
     registrations: list[EventRegistrationItem] = Field(default_factory=list)
+
+
+class InterviewRound(BaseModel):
+    roundName: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=1, max_length=2000)
+
+
+class PlacementExperienceCreateRequest(BaseModel):
+    studentEmail: EmailStr
+    studentRole: UserRole = "student"
+    companyName: str = Field(min_length=2, max_length=120)
+    jobRole: str = Field(min_length=2, max_length=120)
+    interviewDate: str  # ISO date string (YYYY-MM-DD)
+    rounds: list[InterviewRound] = Field(min_length=1, max_length=10)
+    difficultyLevel: int = Field(ge=1, le=5)
+    overallExperience: str = Field(min_length=10, max_length=5000)
+
+
+class PlacementExperienceItem(BaseModel):
+    id: str
+    studentEmail: EmailStr
+    studentName: str | None = None
+    studentDepartment: str | None = None
+    companyName: str
+    jobRole: str
+    interviewDate: str
+    rounds: list[InterviewRound]
+    difficultyLevel: int
+    overallExperience: str
+    createdAt: str
+
+
+class PlacementExperienceListResponse(ApiResponse):
+    experiences: list[PlacementExperienceItem] = Field(default_factory=list)

@@ -56,8 +56,6 @@ export type EventRegistrationItem = {
   studentEmail: string;
   studentDepartment?: string | null;
   answers: Record<string, string>;
-  isPresent: boolean;
-  attendedAt?: string | null;
   createdAt: string;
 };
 

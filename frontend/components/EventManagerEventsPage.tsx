@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { User } from "../types";
 import { eventService, EventFormField, EventItem, EventRegistrationItem } from "../services/events";
-import { Html5QrcodeScanner } from "html5-qrcode";
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -28,6 +27,7 @@ const slugKey = (label: string) =>
     .slice(0, 40) || "field";
 
 const toIsoFromLocal = (local: string): string => {
+  // local is from <input type="datetime-local">, e.g. 2026-02-01T18:30
   const d = new Date(local);
   return d.toISOString();
 };
@@ -64,13 +64,6 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
   const [regsEvent, setRegsEvent] = useState<EventItem | null>(null);
   const [registrations, setRegistrations] = useState<EventRegistrationItem[]>([]);
   const [loadingRegs, setLoadingRegs] = useState(false);
-  const [modalTab, setModalTab] = useState<"list" | "attendance">("list");
-  const [scannerActive, setScannerActive] = useState(false);
-  const [manualRoll, setManualRoll] = useState("");
-  const [markingAtt, setMarkingAtt] = useState(false);
-  const [confirming, setConfirming] = useState<{ id: string, status: boolean } | null>(null);
-
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -83,46 +76,6 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.email]);
-
-  useEffect(() => {
-    let scanner: any = null;
-
-    if (modalTab === "attendance" && scannerActive) {
-      const timer = setTimeout(async () => {
-        const element = document.getElementById("qr-reader");
-        if (element && !scannerRef.current) {
-          try {
-            const { Html5Qrcode } = await import("html5-qrcode");
-            scanner = new Html5Qrcode("qr-reader");
-            scannerRef.current = scanner;
-
-            await scanner.start(
-              { facingMode: "environment" },
-              { fps: 10, qrbox: { width: 300, height: 150 } }, // Barcode friendly
-              async (decodedText: string) => {
-                setManualRoll(decodedText.trim());
-                setScannerActive(false); // Stop to allow confirmation
-              },
-              () => { }
-            );
-          } catch (err) {
-            console.error("Scanner error:", err);
-            setError("Could not start camera.");
-            setScannerActive(false);
-          }
-        }
-      }, 300);
-
-      return () => {
-        clearTimeout(timer);
-        if (scannerRef.current) {
-          scannerRef.current.stop().then(() => {
-            scannerRef.current = null;
-          }).catch(() => { });
-        }
-      };
-    }
-  }, [modalTab, scannerActive]);
 
   const visibleAllowedDepts = useMemo(() => (allDepts ? [] : allowedDepartments), [allDepts, allowedDepartments]);
 
@@ -167,31 +120,9 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
       return;
     }
 
-    if (new Date(startAt) < new Date()) {
-      setError("Start date/time cannot be in the past.");
-      return;
-    }
-
-    if (endAt && new Date(endAt) < new Date(startAt)) {
-      setError("End date/time cannot be before start date/time.");
-      return;
-    }
-
     if (!allDepts && allowedDepartments.length === 0) {
-      setError("Select at least one allowed department (or enable All departments).");
+      setError("Select at least one allowed department (or enable All departments). ");
       return;
-    }
-
-    // Validate form fields
-    for (const f of fields) {
-      if (!f.label.trim()) {
-        setError("All form fields must have a label.");
-        return;
-      }
-      if (f.type === "select" && (!f.options || f.options.filter(Boolean).length === 0)) {
-        setError(`Field "${f.label}" of type Select must have at least one option.`);
-        return;
-      }
     }
 
     const payload = {
@@ -243,7 +174,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
     setToast(null);
     setError(null);
     if (!posterFile) {
-      setError("Please choose a poster image (PNG/JPG).");
+      setError("Please choose a poster image (PNG/JPG)." );
       return;
     }
     const res = await eventService.uploadPoster(user, eventId, posterFile);
@@ -261,35 +192,9 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
     setRegsEvent(ev);
     setRegistrations([]);
     setLoadingRegs(true);
-    setModalTab("list");
     const list = await eventService.listRegistrations(user, ev.id);
     setRegistrations(list);
     setLoadingRegs(false);
-  };
-
-  const handleMarkAttendance = async (id: string, status: boolean = true) => {
-    if (!regsEvent || !id.trim()) return;
-    setMarkingAtt(true);
-    const res = await eventService.markAttendance(user, regsEvent.id, id.trim(), status);
-    setMarkingAtt(false);
-    setConfirming(null);
-    if (res.success) {
-      setToast(res.message);
-      setError(null);
-      setManualRoll("");
-      // refresh registrations list
-      const list = await eventService.listRegistrations(user, regsEvent.id);
-      setRegistrations(list);
-    } else {
-      setError(res.message);
-      setToast(null);
-    }
-  };
-
-  const downloadReport = () => {
-    if (!regsEvent) return;
-    const url = eventService.getAttendanceReportUrl(user, regsEvent.id);
-    window.open(url, "_blank");
   };
 
   const posterUrl = (ev: EventItem) => {
@@ -310,8 +215,9 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
 
         {(toast || error) && (
           <div
-            className={`mt-5 p-4 rounded-2xl border font-bold ${error ? "bg-rose-50 text-rose-700 border-rose-100" : "bg-emerald-50 text-emerald-700 border-emerald-100"
-              }`}
+            className={`mt-5 p-4 rounded-2xl border font-bold ${
+              error ? "bg-rose-50 text-rose-700 border-rose-100" : "bg-emerald-50 text-emerald-700 border-emerald-100"
+            }`}
           >
             {error || toast}
           </div>
@@ -395,10 +301,11 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                           key={d}
                           type="button"
                           onClick={() => toggleDept(d)}
-                          className={`px-3 py-2 rounded-xl border text-xs font-black ${allowedDepartments.includes(d)
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-100"
-                            : "bg-slate-50 text-slate-600 border-slate-200"
-                            }`}
+                          className={`px-3 py-2 rounded-xl border text-xs font-black ${
+                            allowedDepartments.includes(d)
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-100"
+                              : "bg-slate-50 text-slate-600 border-slate-200"
+                          }`}
                         >
                           {d}
                         </button>
@@ -582,7 +489,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                           onClick={() => openRegistrations(ev)}
                           className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-black text-xs border border-slate-200"
                         >
-                          Manage
+                          Registrations
                         </button>
                       </div>
                     </div>
@@ -655,152 +562,44 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
       </div>
 
       {regsEvent && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" onClick={() => { setRegsEvent(null); setScannerActive(false); }}>
-          <div className="w-full max-w-4xl bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-2xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" onClick={() => setRegsEvent(null)}>
+          <div className="w-full max-w-3xl bg-white rounded-[2rem] p-6 border border-slate-100 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-2xl font-black text-slate-800">{regsEvent.title}</h3>
-                <p className="mt-1 text-sm font-bold text-slate-500">Event Administration & Attendance Tracking</p>
+                <h3 className="text-xl font-black text-slate-800">Registrations • {regsEvent.title}</h3>
+                <p className="mt-1 text-sm font-bold text-slate-500">Total: {registrations.length}</p>
               </div>
-              <button className="text-slate-500 font-black text-xl" onClick={() => { setRegsEvent(null); setScannerActive(false); }}>
+              <button className="text-slate-500 font-black" onClick={() => setRegsEvent(null)}>
                 ✕
               </button>
             </div>
 
-            <div className="mt-6 flex gap-2 p-1 bg-slate-100 rounded-2xl w-fit">
-              <button
-                onClick={() => { setModalTab("list"); setScannerActive(false); }}
-                className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${modalTab === "list" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  }`}
-              >
-                Registration List ({registrations.length})
-              </button>
-              <button
-                onClick={() => setModalTab("attendance")}
-                className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${modalTab === "attendance" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  }`}
-              >
-                Mark Attendance
-              </button>
-            </div>
-
-            {(toast || error) && (
-              <div
-                className={`mt-4 p-4 rounded-xl border text-sm font-bold ${error ? "bg-rose-50 text-rose-700 border-rose-100" : "bg-emerald-50 text-emerald-700 border-emerald-100"
-                  }`}
-              >
-                {error || toast}
-              </div>
-            )}
-
-            {modalTab === "list" ? (
-              <div className="mt-6 flex-grow flex flex-col overflow-hidden">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-black text-slate-800 uppercase tracking-widest text-[10px]">Registered Students</h4>
-                  <button
-                    onClick={downloadReport}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-xs shadow-md hover:bg-emerald-700"
-                  >
-                    📥 Download CSV Report
-                  </button>
-                </div>
-                {loadingRegs ? (
-                  <p className="text-sm font-bold text-slate-500">Loading…</p>
-                ) : registrations.length === 0 ? (
-                  <p className="text-sm font-bold text-slate-500">No registrations yet.</p>
-                ) : (
-                  <div className="flex-grow overflow-auto pr-1 space-y-3">
-                    {registrations.map((r) => (
-                      <div key={r.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-[10px] ${r.isPresent ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
-                              {r.isPresent ? "✓" : "•"}
-                            </div>
-                            <div>
-                              <p className="font-black text-slate-800 text-sm truncate">{r.studentEmail}</p>
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                {r.studentDepartment || "No Dept"} • {new Date(r.createdAt).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => setConfirming({ id: r.studentEmail, status: !r.isPresent })}
-                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border transition-all ${r.isPresent ? "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100" : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"}`}
-                          >
-                            {r.isPresent ? "Present" : "Absent"}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+            {loadingRegs ? (
+              <p className="mt-4 text-sm font-bold text-slate-500">Loading…</p>
+            ) : registrations.length === 0 ? (
+              <p className="mt-4 text-sm font-bold text-slate-500">No registrations yet.</p>
             ) : (
-              <div className="mt-6 flex-grow flex flex-col overflow-hidden">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-black text-slate-800">Quick Scan</h4>
-                      <p className="text-xs font-bold text-slate-500 mt-1">Scan student ticket or ID barcode.</p>
-
-                      {scannerActive ? (
-                        <div className="mt-4 rounded-[2rem] overflow-hidden border-2 border-indigo-600 bg-black aspect-[16/9] flex items-center justify-center">
-                          <div id="qr-reader" className="w-full"></div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setScannerActive(true)}
-                          className="mt-4 w-full aspect-[16/9] bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-4 hover:bg-slate-100 transition-all border-indigo-200 bg-indigo-50/30"
-                        >
-                          <span className="text-4xl">📷</span>
-                          <span className="font-black text-indigo-600 text-sm">Start Scanner (QR/Barcode)</span>
-                        </button>
-                      )}
-
-                      {scannerActive && (
-                        <button
-                          onClick={() => setScannerActive(false)}
-                          className="mt-4 w-full py-3 bg-rose-50 text-rose-700 rounded-2xl font-black text-xs border border-rose-100"
-                        >
-                          Stop Scanner
-                        </button>
-                      )}
+              <div className="mt-4 max-h-[520px] overflow-auto pr-1 space-y-2">
+                {registrations.map((r) => (
+                  <div key={r.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-black text-slate-800 text-sm truncate">{r.studentEmail}</p>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200">
+                        {r.studentDepartment || "—"}
+                      </span>
                     </div>
+                    <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(r.createdAt).toLocaleString()}</p>
+                    {Object.keys(r.answers || {}).length > 0 && (
+                      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {Object.entries(r.answers).slice(0, 12).map(([k, v]) => (
+                          <div key={k} className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2">
+                            <span className="text-slate-500">{k}:</span> {String(v)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-
-                  <div className="bg-slate-50 rounded-[2rem] border border-slate-100 p-8">
-                    <h4 className="font-black text-slate-800">Manual Entry</h4>
-                    <p className="text-xs font-bold text-slate-500 mt-1">Enter Roll Number or Email manually.</p>
-
-                    <div className="mt-6">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Student ID</p>
-                      <input
-                        value={manualRoll}
-                        placeholder="e.g. 21CSR001"
-                        onChange={(e) => setManualRoll(e.target.value)}
-                        className="mt-2 w-full p-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold uppercase transition-all"
-                      />
-                    </div>
-
-                    <button
-                      disabled={markingAtt || !manualRoll.trim()}
-                      onClick={() => setConfirming({ id: manualRoll, status: true })}
-                      className="mt-6 w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-60"
-                    >
-                      {markingAtt ? "Processing…" : "Mark as Present"}
-                    </button>
-
-                    <div className="mt-8 pt-8 border-t border-slate-200">
-                      <h5 className="font-black text-slate-400 text-[10px] uppercase tracking-widest mb-4">Tips</h5>
-                      <ul className="text-xs font-bold text-slate-500 space-y-2">
-                        <li className="flex gap-2"><span>•</span> <span>Scanning works for both QR codes and barcodes.</span></li>
-                        <li className="flex gap-2"><span>•</span> <span>You can download the full attendance list at any time.</span></li>
-                        <li className="flex gap-2"><span>•</span> <span>Status cards allow toggling present/absent state.</span></li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
             )}
 

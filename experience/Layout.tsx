@@ -32,7 +32,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'alumni_posts', label: 'My Posts', icon: '🧾' },
         { id: 'alumni_requests', label: 'Referrals', icon: '✅' },
-        { id: 'ai-coach', label: 'AI Coach', icon: '🤖' },
         { id: 'chat', label: 'Chats', icon: '💬' },
         { id: 'profile', label: 'My Profile', icon: '👤' },
       ];
@@ -51,6 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, user
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'opportunities', label: 'Explore Hub', icon: '🔍' },
         { id: 'placements', label: 'Placements', icon: '🏢' },
+        { id: 'experiences', label: 'Experiences', icon: '💼' },
         { id: 'student_instructions', label: 'Instructions', icon: '🧭' },
         { id: 'student_notes', label: 'Notes', icon: '📚' },
         { id: 'resume_analyzer', label: 'Resume Analyzer', icon: '🧠' },
