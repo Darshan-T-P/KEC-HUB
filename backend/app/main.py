@@ -17,12 +17,17 @@ _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # Serve uploaded files for development.
 app.mount("/uploads", StaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
 
+origins = [
+    "https://kec-hub-frontend.vercel.app",  # your frontend URL
+    "http://localhost:3000",                 # optional: local dev
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,       # allowed origins
+    allow_credentials=True,      # if sending cookies or auth headers
+    allow_methods=["*"],         # allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],         # allow all headers
 )
 
 @app.on_event("startup")
