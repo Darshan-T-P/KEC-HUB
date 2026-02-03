@@ -80,3 +80,9 @@ def get_db() -> AsyncIOMotorDatabase:
     if _db is None:
         raise RuntimeError("MongoDB is not initialized")
     return _db
+
+
+def get_kec_hub_db() -> AsyncIOMotorDatabase:
+    if _client is None:
+        raise RuntimeError("MongoDB is not initialized")
+    return _client["kec_hub"]

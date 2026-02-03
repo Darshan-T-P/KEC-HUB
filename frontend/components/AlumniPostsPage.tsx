@@ -92,31 +92,46 @@ const AlumniPostsPage: React.FC<Props> = ({ user }) => {
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 bg-slate-50 rounded-2xl border border-slate-100 p-6">
             <h3 className="font-black text-slate-800">Create Post</h3>
-            <div className="mt-4 space-y-3">
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Title (e.g. SDE Intern @ Company)"
-                className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none font-bold focus:ring-2 focus:ring-indigo-500"
-              />
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description / eligibility / how to apply"
-                className="w-full min-h-[140px] px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none font-bold focus:ring-2 focus:ring-indigo-500"
-              />
-              <input
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="Tags (comma separated)"
-                className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none font-bold focus:ring-2 focus:ring-indigo-500"
-              />
-              <input
-                value={link}
-                onChange={(e) => setLink(e.target.value)}
-                placeholder="Link (optional)"
-                className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none font-bold focus:ring-2 focus:ring-indigo-500"
-              />
+            <div className="mt-4 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Title *</label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. SDE Intern @ Company"
+                  className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none font-bold focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Description *</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Description / eligibility / how to apply"
+                  className="w-full min-h-[140px] px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none font-bold focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Tags</label>
+                <input
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="Tags (comma separated)"
+                  className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none font-bold focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Link</label>
+                <input
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none font-bold focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
               <button
                 disabled={saving}
                 onClick={create}

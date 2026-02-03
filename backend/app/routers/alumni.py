@@ -8,7 +8,7 @@ from ..models import (
     ApiResponse, 
     UserRole
 )
-from ..deps import get_user_repo, get_alumni_posts_repo
+from ..deps import get_user_repo, get_alumni_posts_repo, get_current_user
 from ..database.db import mongodb_ok
 
 router = APIRouter(prefix="/alumni", tags=["alumni"])
@@ -25,7 +25,11 @@ def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat()
 
 @router.get("/list", response_model=AlumniListResponse)
-async def list_alumni(limit: int = Query(default=50, ge=1, le=200), user_repo=Depends(get_user_repo)) -> AlumniListResponse:
+async def list_alumni(
+    limit: int = Query(default=50, ge=1, le=200), 
+    user_repo=Depends(get_user_repo),
+    current_user: dict = Depends(get_current_user)
+) -> AlumniListResponse:
     if not mongodb_ok():
         return AlumniListResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
 
@@ -44,7 +48,11 @@ async def list_alumni(limit: int = Query(default=50, ge=1, le=200), user_repo=De
     return AlumniListResponse(success=True, message="ok", alumni=alumni)
 
 @router.get("/posts", response_model=AlumniPostListResponse)
-async def list_alumni_posts(limit: int = Query(default=100, ge=1, le=300), alumni_posts=Depends(get_alumni_posts_repo)) -> AlumniPostListResponse:
+async def list_alumni_posts(
+    limit: int = Query(default=100, ge=1, le=300), 
+    alumni_posts=Depends(get_alumni_posts_repo),
+    current_user: dict = Depends(get_current_user)
+) -> AlumniPostListResponse:
     if not mongodb_ok():
         return AlumniPostListResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
     docs = await alumni_posts.list_all(limit=limit)
@@ -63,7 +71,15 @@ async def list_alumni_posts(limit: int = Query(default=100, ge=1, le=300), alumn
     return AlumniPostListResponse(success=True, message="ok", posts=posts)
 
 @router.get("/{email}/posts", response_model=AlumniPostListResponse)
-async def list_posts_by_alumni(email: str, role: UserRole = "alumni", limit: int = Query(default=100, ge=1, le=300), alumni_posts=Depends(get_alumni_posts_repo)) -> AlumniPostListResponse:
+async def list_posts_by_alumni(
+    email: str, 
+    role: UserRole = "alumni", 
+    limit: int = Query(default=100, ge=1, le=300), 
+    alumni_posts=Depends(get_alumni_posts_repo),
+    current_user: dict = Depends(get_current_user)
+) -> AlumniPostListResponse:
+    if current_user.get("email") != email:
+        raise HTTPException(status_code=403, detail="Not authorized to access these posts.")
     if not _is_allowed_domain(email):
         return AlumniPostListResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
     if not mongodb_ok():
@@ -88,7 +104,14 @@ async def list_posts_by_alumni(email: str, role: UserRole = "alumni", limit: int
     return AlumniPostListResponse(success=True, message="ok", posts=posts)
 
 @router.post("/posts", response_model=ApiResponse)
-async def create_alumni_post(payload: AlumniPostCreateRequest, alumni_posts=Depends(get_alumni_posts_repo), user_repo=Depends(get_user_repo)) -> ApiResponse:
+async def create_alumni_post(
+    payload: AlumniPostCreateRequest, 
+    alumni_posts=Depends(get_alumni_posts_repo), 
+    user_repo=Depends(get_user_repo),
+    current_user: dict = Depends(get_current_user)
+) -> ApiResponse:
+    if current_user.get("email") != str(payload.alumniEmail):
+        raise HTTPException(status_code=403, detail="Not authorized to create post as this user.")
     if not _is_allowed_domain(str(payload.alumniEmail)):
         return ApiResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
     if not mongodb_ok():

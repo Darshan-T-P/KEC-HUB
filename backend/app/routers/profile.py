@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from ..models import ProfileResponse, ProfileUpdateRequest, UserRole, UserProfile
-from ..deps import get_user_repo
+from ..deps import get_user_repo, get_current_user
 from ..database.db import mongodb_ok
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -42,7 +42,14 @@ def _to_user_profile(user_doc: dict) -> UserProfile:
     )
 
 @router.get("/{email}", response_model=ProfileResponse)
-async def get_profile(email: str, role: UserRole = "student", user_repo=Depends(get_user_repo)) -> ProfileResponse:
+async def get_profile(
+    email: str, 
+    role: UserRole = "student", 
+    user_repo=Depends(get_user_repo),
+    current_user: dict = Depends(get_current_user)
+) -> ProfileResponse:
+    if current_user.get("email") != email:
+        raise HTTPException(status_code=403, detail="Not authorized to view this profile.")
     if not _is_allowed_domain(email):
         return ProfileResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
     if not mongodb_ok():
@@ -55,7 +62,15 @@ async def get_profile(email: str, role: UserRole = "student", user_repo=Depends(
     return ProfileResponse(success=True, message="ok", profile=_to_user_profile(user_doc))
 
 @router.put("/{email}", response_model=ProfileResponse)
-async def update_profile(email: str, payload: ProfileUpdateRequest, role: UserRole = "student", user_repo=Depends(get_user_repo)) -> ProfileResponse:
+async def update_profile(
+    email: str, 
+    payload: ProfileUpdateRequest, 
+    role: UserRole = "student", 
+    user_repo=Depends(get_user_repo),
+    current_user: dict = Depends(get_current_user)
+) -> ProfileResponse:
+    if current_user.get("email") != email:
+        raise HTTPException(status_code=403, detail="Not authorized to update this profile.")
     if not _is_allowed_domain(email):
         return ProfileResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
     if not mongodb_ok():
@@ -81,7 +96,15 @@ async def update_profile(email: str, payload: ProfileUpdateRequest, role: UserRo
     return ProfileResponse(success=True, message="Profile updated.", profile=_to_user_profile(user_doc))
 
 @router.post("/{email}/resume", response_model=ProfileResponse)
-async def upload_resume(email: str, file: UploadFile = File(...), role: UserRole = "student", user_repo=Depends(get_user_repo)) -> ProfileResponse:
+async def upload_resume(
+    email: str, 
+    file: UploadFile = File(...), 
+    role: UserRole = "student", 
+    user_repo=Depends(get_user_repo),
+    current_user: dict = Depends(get_current_user)
+) -> ProfileResponse:
+    if current_user.get("email") != email:
+        raise HTTPException(status_code=403, detail="Not authorized to upload resume for this profile.")
     if not _is_allowed_domain(email):
         return ProfileResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
     if not mongodb_ok():

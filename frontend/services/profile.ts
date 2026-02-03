@@ -1,3 +1,5 @@
+import { authService } from './auth';
+
 export interface ApiResponse<T> {
   success: boolean;
   message: string;
@@ -49,7 +51,9 @@ export type ProfileUpdate = Partial<Omit<UserProfile, 'email' | 'resume'>>;
 export const profileService = {
   getProfile: async (email: string, role: string): Promise<ApiResponse<UserProfile>> => {
     try {
-      const res = await fetch(`${API_BASE_URL}/profile/${encodeURIComponent(email)}?role=${encodeURIComponent(role)}`);
+      const res = await fetch(`${API_BASE_URL}/profile/${encodeURIComponent(email)}?role=${encodeURIComponent(role)}`, {
+        headers: authService.getAuthHeaders()
+      });
       return (await res.json()) as ApiResponse<UserProfile>;
     } catch {
       return { success: false, message: 'Profile service is unreachable. Start the backend and try again.' };
@@ -60,7 +64,7 @@ export const profileService = {
     try {
       const res = await fetch(`${API_BASE_URL}/profile/${encodeURIComponent(email)}?role=${encodeURIComponent(role)}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authService.getAuthHeaders(),
         body: JSON.stringify(update),
       });
       const data = await res.json().catch(() => null);
@@ -87,11 +91,16 @@ export const profileService = {
       const form = new FormData();
       form.append('file', file);
 
+      const headers: Record<string, string> = {};
+      const token = authService.getAccessToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(
         `${API_BASE_URL}/profile/${encodeURIComponent(email)}/resume?role=${encodeURIComponent(role)}`,
         {
-        method: 'POST',
-        body: form,
+          method: 'POST',
+          headers: headers,
+          body: form,
         }
       );
 

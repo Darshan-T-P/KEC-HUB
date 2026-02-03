@@ -1,8 +1,11 @@
 
+import { User } from '../types';
+
 export interface AuthResponse {
   success: boolean;
   message: string;
-  user?: any;
+  user?: User;
+  accessToken?: string;
 }
 
 export type UserRole = 'student' | 'event_manager' | 'alumni' | 'management';
@@ -18,6 +21,26 @@ export const validateKonguEmail = (email: string): boolean => {
 // Note: Register/Login are now handled by the backend (MongoDB).
 
 export const authService = {
+  getAccessToken: () => localStorage.getItem('kec_access_token'),
+
+  getAuthHeaders: () => {
+    const token = localStorage.getItem('kec_access_token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+  },
+
+  saveAuth: (data: AuthResponse) => {
+    if (data.accessToken) localStorage.setItem('kec_access_token', data.accessToken);
+    if (data.user) localStorage.setItem('kec_current_user', JSON.stringify(data.user));
+  },
+
+  clearAuth: () => {
+    localStorage.removeItem('kec_access_token');
+    localStorage.removeItem('kec_current_user');
+  },
+
   /**
    * Request an OTP to be sent to the user's email.
    * Calls the FastAPI backend, which handles rate limiting + sending.
@@ -80,6 +103,34 @@ export const authService = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, role })
+      });
+      const data = (await res.json()) as AuthResponse;
+      return data;
+    } catch (e) {
+      return { success: false, message: 'Auth service is unreachable. Start the backend and try again.' };
+    }
+  },
+
+  checkUser: async (email: string, role: UserRole): Promise<AuthResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/check-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role })
+      });
+      const data = (await res.json()) as AuthResponse;
+      return data;
+    } catch (e) {
+      return { success: false, message: 'Auth service is unreachable. Start the backend and try again.' };
+    }
+  },
+
+  resetPassword: async (email: string, new_password: string, role: UserRole): Promise<AuthResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, new_password, role })
       });
       const data = (await res.json()) as AuthResponse;
       return data;

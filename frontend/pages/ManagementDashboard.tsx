@@ -1,5 +1,5 @@
-
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User } from '../types';
 import { PlacementItem } from '../services/placements';
 import { InstructionItem, NoteItem } from '../services/managementContent';
@@ -12,7 +12,6 @@ interface ManagementDashboardProps {
     mgmtInstructions: InstructionItem[];
     mgmtNotes: NoteItem[];
     loadManagementDashboard: () => Promise<void>;
-    setActiveTab: (tab: string) => void;
     handleLogout: () => void;
 }
 
@@ -24,9 +23,9 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({
     mgmtInstructions,
     mgmtNotes,
     loadManagementDashboard,
-    setActiveTab,
     handleLogout
 }) => {
+    const navigate = useNavigate();
     const totalPlacements = mgmtPlacements.length;
     const now = Date.now();
     const activePlacements = mgmtPlacements.filter(p => {
@@ -73,7 +72,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({
                         Refresh
                     </button>
                     <button
-                        onClick={() => setActiveTab('placements_manage')}
+                        onClick={() => navigate('/placements-manage')}
                         className="flex items-center gap-3 px-8 py-4 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-slate-800 transition-all group"
                     >
                         Manage Placements
@@ -102,7 +101,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({
                             Recent Placement Notices
                         </h3>
                         <button
-                            onClick={() => setActiveTab('placements_manage')}
+                            onClick={() => navigate('/placements-manage')}
                             className="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-2 rounded-full border border-indigo-100 hover:bg-indigo-100 transition-all"
                         >
                             Open Placements →
@@ -128,7 +127,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({
                                                 </p>
                                             </div>
                                             <button
-                                                onClick={() => setActiveTab('placements_manage')}
+                                                onClick={() => navigate('/placements-manage')}
                                                 className="px-5 py-3 bg-slate-900 text-white font-black rounded-2xl text-sm hover:bg-slate-800 transition-all"
                                             >
                                                 Manage
@@ -143,7 +142,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({
                             <h4 className="text-xl font-black text-slate-800">No placement notices yet</h4>
                             <p className="text-slate-400 font-bold mt-2 max-w-xs mx-auto">Create your first notice to start sharing eligible opportunities.</p>
                             <button
-                                onClick={() => setActiveTab('placements_manage')}
+                                onClick={() => navigate('/placements-manage')}
                                 className="mt-6 px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all"
                             >
                                 Create Placement Notice
@@ -160,13 +159,13 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({
                         </h3>
                         <div className="space-y-3">
                             <button
-                                onClick={() => setActiveTab('mgmt_instructions')}
+                                onClick={() => navigate('/mgmt-instructions')}
                                 className="w-full py-4 bg-slate-900 text-white font-black rounded-2xl text-sm hover:bg-slate-800 transition-all"
                             >
                                 Post Instructions
                             </button>
                             <button
-                                onClick={() => setActiveTab('mgmt_notes')}
+                                onClick={() => navigate('/mgmt-notes')}
                                 className="w-full py-4 bg-slate-100 text-slate-800 font-black rounded-2xl text-sm hover:bg-slate-200 transition-all"
                             >
                                 Upload Notes

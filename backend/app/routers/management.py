@@ -55,6 +55,7 @@ def _to_placement_item(d: dict) -> PlacementItem:
         minCgpa=d.get("minCgpa"),
         maxArrears=d.get("maxArrears"),
         resources=d.get("resources") or [],
+        rounds=d.get("rounds") or [],
         createdAt=_iso(created) if isinstance(created, datetime) else str(created or ""),
         score=d.get("score", 0.0),
         reasons=d.get("reasons") or [],
@@ -115,6 +116,19 @@ async def create_placement_notice(payload: PlacementCreateRequest, placement_rep
 
     allowed, allowed_lower = _normalize_allowed_departments(payload.allowedDepartments)
 
+    # Initialize rounds if provided
+    rounds_data = []
+    if payload.rounds:
+        for i, r in enumerate(payload.rounds):
+            rounds_data.append({
+                "roundNumber": i + 1,
+                "name": r.name,
+                "description": r.description,
+                "selectedStudents": [],
+                "uploadedAt": None,
+                "uploadedBy": None
+            })
+
     await placement_repo.create(
         {
             "staffEmail": str(payload.staffEmail),
@@ -131,10 +145,116 @@ async def create_placement_notice(payload: PlacementCreateRequest, placement_rep
             "minCgpa": float(payload.minCgpa) if payload.minCgpa is not None else None,
             "maxArrears": int(payload.maxArrears) if payload.maxArrears is not None else None,
             "resources": [r.model_dump() for r in (payload.resources or [])],
+            "rounds": rounds_data,
             "createdAt": datetime.now(timezone.utc),
         }
     )
     return ApiResponse(success=True, message="Placement notice created.")
+
+@router.post("/placements/{notice_id}/rounds/{round_num}/upload", response_model=ApiResponse)
+async def upload_round_students(
+    notice_id: str,
+    round_num: int,
+    email: str = Query(...),
+    role: UserRole = Query("management"),
+    file: UploadFile = File(...),
+    placement_repo=Depends(get_placement_repo),
+    user_repo=Depends(get_user_repo)
+) -> ApiResponse:
+    if not _is_allowed_domain(email):
+        return ApiResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
+    if not mongodb_ok():
+        return ApiResponse(success=False, message="MongoDB is not connected.")
+    
+    if role != "management":
+        return ApiResponse(success=False, message="Role must be management.")
+
+    # 1. Fetch Notice
+    notice = await placement_repo.get_by_id(notice_id)
+    if not notice:
+        return ApiResponse(success=False, message="Notice not found.")
+    
+    if str(notice.get("staffEmail")).lower() != email.lower():
+        return ApiResponse(success=False, message="Unauthorized.")
+
+    # 2. Parse File (CSV/Excel)
+    import pandas as pd
+    try:
+        content = await file.read()
+        if file.filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            df = pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        return ApiResponse(success=False, message=f"Failed to parse file: {str(e)}")
+
+    if df.empty:
+        return ApiResponse(success=False, message="File is empty.")
+
+    # Support transposed excel (if headers are in first column instead of first row)
+    # Basic check: if we have very fewer columns but many rows, it might be normal.
+    # If we have identifiers in first column, we treat them as students.
+    
+    identifiers = []
+    # Try common column names
+    target_cols = ["email", "roll_number", "rollno", "identifier", "student_email"]
+    header_found = False
+    for col in df.columns:
+        if str(col).lower().replace(" ", "_") in target_cols:
+            identifiers = df[col].dropna().astype(str).str.strip().tolist()
+            header_found = True
+            break
+    
+    if not header_found:
+        # If no header matches, assume first column contains identifiers
+        identifiers = df.iloc[:, 0].dropna().astype(str).str.strip().tolist()
+        # If it was transposed, maybe we should also try first row? 
+        # But pandas read normally handles that if transposed is handled beforehand.
+        # Minimal support: try to see if first row looks like identifiers
+        if not identifiers:
+             identifiers = df.columns.dropna().astype(str).str.strip().tolist()
+
+    if not identifiers:
+        return ApiResponse(success=False, message="No student identifiers found in file.")
+
+    # 3. Match Students
+    # We allow matching by email or roll number
+    matched_emails = []
+    for ident in identifiers:
+        if "@" in ident:
+            # Assume email
+            user = await user_repo.find_public_by_email_and_role(ident, "student")
+            if user:
+                matched_emails.append(user["email"])
+        else:
+            # Assume roll number
+            user = await user_repo.find_by_roll_number_case_insensitive(ident)
+            if user:
+                matched_emails.append(user["email"])
+
+    matched_emails = list(set(matched_emails)) # uniq
+    if not matched_emails:
+        return ApiResponse(success=False, message="No matching students found in system.")
+
+    # 4. Update Repository
+    ok = await placement_repo.update_round_students(notice_id, int(round_num), matched_emails, email)
+    if not ok:
+        return ApiResponse(success=False, message="Failed to update round. Ensure the round exists.")
+
+    # 5. Notify Students (Mock Email)
+    company = notice.get("companyName", "The Company")
+    title = notice.get("title", "Position")
+    round_name = "the selected round"
+    for r in notice.get("rounds") or []:
+        if r.get("roundNumber") == int(round_num):
+            round_name = r.get("name")
+            break
+
+    print(f"[MAIL] Notifying {len(matched_emails)} students about {company} - {round_name}")
+    # In a real app, you'd call a mail service here.
+    # we'll add a database notification or log it.
+    
+    return ApiResponse(success=True, message=f"Successfully uploaded {len(matched_emails)} students and triggered notifications.")
 
 @router.get("/placements/mine/{email}", response_model=PlacementListResponse)
 async def list_my_placement_notices(

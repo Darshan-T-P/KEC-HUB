@@ -7,9 +7,11 @@ from ..models import (
     UserRole, 
     ResumeAnalysisResponse, 
     ResumeAnalysisResult, 
-    ResumeImprovement
+    ResumeImprovement,
+    StudentPlacementStatusResponse,
+    StudentRoundStatus
 )
-from ..deps import get_user_repo, get_opportunity_extractor, get_resume_analyzer
+from ..deps import get_user_repo, get_opportunity_extractor, get_resume_analyzer, get_current_user, get_placement_repo
 from ..database.db import mongodb_ok
 from ..opportunity_extractor.types import ProfileSignals
 from ml.predict import recommend
@@ -147,8 +149,11 @@ async def realtime_opportunities(
     email: str, 
     role: UserRole = "student", 
     user_repo=Depends(get_user_repo),
-    extractor=Depends(get_opportunity_extractor)
+    extractor=Depends(get_opportunity_extractor),
+    current_user: dict = Depends(get_current_user)
 ) -> OpportunitiesResponse:
+    if current_user.get("email") != email:
+        raise HTTPException(status_code=403, detail="Not authorized to access these opportunities.")
     if not _is_allowed_domain(email):
         return OpportunitiesResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
     if not mongodb_ok():
@@ -174,7 +179,7 @@ async def realtime_opportunities(
         web_meta = (meta or {}).get("web") or {}
 
         # Integrate ML Recommendation with real profile data
-        profile = student.get("profile") or {}
+        profile = user_doc.get("profile") or {}
         student_data = {
             "skills": profile.get("skills") or signals.skills,
             "branch": signals.department,
@@ -199,7 +204,9 @@ async def realtime_opportunities(
                 item.reasons = list(set((item.reasons or []) + rec["why_recommended"]))
             return item
 
+        print(f"Extractor found {len(ops)} opportunities.")
         enhanced_ops = [_enhance_with_ml(_to_opportunity_item(o)) for o in ops]
+        print(f"Enhanced {len(enhanced_ops)} opportunities.")
         # Re-sort based on new ML score
         enhanced_ops.sort(key=lambda x: x.score, reverse=True)
 
@@ -215,8 +222,12 @@ async def realtime_opportunities(
             webSearchUsed=bool(web_meta.get("used")),
             webSearchError=str(web_meta.get("error")) if web_meta.get("error") else None,
         )
-    except Exception:
-        return OpportunitiesResponse(success=False, message="Failed to extract opportunities. Try again.")
+    except Exception as e:
+        print(f"Extraction error: {str(e)}")
+        # Log stack trace if possible
+        import traceback
+        traceback.print_exc()
+        return OpportunitiesResponse(success=False, message=f"Extraction error: {str(e)}")
 
 @router.post("/resume/analyze", response_model=ResumeAnalysisResponse)
 async def analyze_resume(
@@ -225,8 +236,11 @@ async def analyze_resume(
     jobDescription: str = Form(...),
     file: UploadFile = File(...),
     user_repo=Depends(get_user_repo),
-    analyzer=Depends(get_resume_analyzer)
+    analyzer=Depends(get_resume_analyzer),
+    current_user: dict = Depends(get_current_user)
 ) -> ResumeAnalysisResponse:
+    if current_user.get("email") != email:
+        raise HTTPException(status_code=403, detail="Not authorized to analyze resume for this profile.")
     if role != "student":
         return ResumeAnalysisResponse(success=False, message="Only students can use resume analysis.")
 
@@ -289,3 +303,34 @@ async def analyze_resume(
         model=analyzer.model,
         result=result,
     )
+
+@router.get("/placements/status/{email}", response_model=StudentPlacementStatusResponse)
+async def get_student_placement_status(
+    email: str,
+    role: UserRole = "student",
+    placement_repo=Depends(get_placement_repo),
+    current_user: dict = Depends(get_current_user)
+) -> StudentPlacementStatusResponse:
+    if current_user.get("email") != email:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    if role != "student":
+        return StudentPlacementStatusResponse(success=False, message="Only students have placement status.")
+    
+    # Efficiently find all placements where this student is selected in any round
+    # We look for students in rounds.selectedStudents
+    cur = placement_repo.col.find({"rounds.selectedStudents": email})
+    all_selections = []
+    
+    async for notice in cur:
+        for round_item in (notice.get("rounds") or []):
+            if email in (round_item.get("selectedStudents") or []):
+                all_selections.append(StudentRoundStatus(
+                    placementId=str(notice["_id"]),
+                    companyName=notice.get("companyName", "Unknown"),
+                    title=notice.get("title", "Position"),
+                    roundNumber=round_item.get("roundNumber", 0),
+                    roundName=round_item.get("name", "Round"),
+                    notifiedAt=str(round_item.get("uploadedAt") or notice.get("createdAt"))
+                ))
+    
+    return StudentPlacementStatusResponse(success=True, message="ok", selections=all_selections)

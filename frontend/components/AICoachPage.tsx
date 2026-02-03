@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { FormattedText } from './FormattedText';
 import { User } from '../types';
 
 interface AICoachPageProps {
@@ -137,13 +138,12 @@ const AICoachPage: React.FC<AICoachPageProps> = ({ user }) => {
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
             >
               <div
-                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 ${
-                  message.role === 'user'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-white text-slate-800 shadow-sm border border-slate-200'
-                }`}
+                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 ${message.role === 'user'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                  }`}
               >
-                <div className="text-sm sm:text-base whitespace-pre-wrap break-words">{message.content}</div>
+                <FormattedText text={message.content} className={message.role === 'user' ? 'text-white' : 'text-slate-800'} />
                 <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-indigo-200' : 'text-slate-400'}`}>
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>

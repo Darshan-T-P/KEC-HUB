@@ -1,4 +1,5 @@
 import { CrawlMeta, Opportunity, User } from "../types";
+import { authService } from "./auth";
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -9,7 +10,8 @@ const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "http://loca
 export const crawlActiveOpportunities = async (user: Pick<User, "email" | "role">): Promise<Opportunity[]> => {
   try {
     const res = await fetch(
-      `${API_BASE_URL}/opportunities/realtime/${encodeURIComponent(user.email)}?role=${encodeURIComponent(user.role)}`
+      `${API_BASE_URL}/opportunities/realtime/${encodeURIComponent(user.email)}?role=${encodeURIComponent(user.role)}`,
+      { headers: authService.getAuthHeaders() }
     );
     const data = await res.json();
     if (!data?.success) return [];
@@ -45,7 +47,8 @@ export const crawlActiveOpportunitiesWithMeta = async (
 ): Promise<{ opportunities: Opportunity[]; meta: CrawlMeta }> => {
   try {
     const res = await fetch(
-      `${API_BASE_URL}/opportunities/realtime/${encodeURIComponent(user.email)}?role=${encodeURIComponent(user.role)}`
+      `${API_BASE_URL}/opportunities/realtime/${encodeURIComponent(user.email)}?role=${encodeURIComponent(user.role)}`,
+      { headers: authService.getAuthHeaders() }
     );
     const data = await res.json();
     if (!data?.success) {

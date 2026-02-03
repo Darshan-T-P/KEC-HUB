@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Literal, Optional
 
 import anyio
+import jwt
 from passlib.context import CryptContext
 from passlib.exc import PasswordSizeError
 
 from .email_sender import send_email_otp
-from .database.repositories import OtpRepository, UserRepository, VerifiedEmailRepository, utc_now
+from .database.repositories import OtpRepository, UserRepository, VerifiedEmailRepository, AuthorizedEmailRepository, utc_now
 from .settings import settings
 
 # bcrypt has a 72-byte password limit; for better UX use pbkdf2_sha256 for new
@@ -30,12 +31,32 @@ def _as_utc_aware(dt: datetime) -> datetime:
 
 
 class AuthService:
-    def __init__(self, otp_repo: OtpRepository, verified_repo: VerifiedEmailRepository, user_repo: UserRepository):
+    def __init__(
+        self, 
+        otp_repo: OtpRepository, 
+        verified_repo: VerifiedEmailRepository, 
+        user_repo: UserRepository,
+        auth_email_repo: AuthorizedEmailRepository
+    ):
         self.otp_repo = otp_repo
         self.verified_repo = verified_repo
         self.user_repo = user_repo
+        self.auth_email_repo = auth_email_repo
+
+    def _create_access_token(self, email: str, role: str) -> str:
+        expires = utc_now() + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+        to_encode = {
+            "sub": email,
+            "role": role,
+            "exp": expires
+        }
+        return jwt.encode(to_encode, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
     async def send_otp(self, email: str) -> Literal["console", "smtp"]:
+        # NEW: Check if the email is in the authorized sheet1 collection in kec_hub db
+        if not await self.auth_email_repo.is_authorized(email):
+            raise ValueError("user not found with the email")
+
         now = utc_now()
         existing = await self.otp_repo.get(email)
 
@@ -114,7 +135,10 @@ class AuthService:
         password: str,
         department: str = "Computer Science",
         role: str = "student",
-    ) -> None:
+    ) -> dict:
+        if not await self.auth_email_repo.is_authorized(email):
+            raise ValueError("user not found with the email")
+
         if not await self.verified_repo.is_verified(email):
             raise ValueError("Email not verified. Please verify OTP before registering.")
 
@@ -126,16 +150,27 @@ class AuthService:
             password_hash = _pwd.hash(password)
         except PasswordSizeError:
             raise ValueError("Password is too long. Please choose a shorter password.")
-        await self.user_repo.create(
-            {
+        
+        user_doc = {
+            "name": name,
+            "email": email,
+            "role": role,
+            "department": department,
+            "passwordHash": password_hash,
+            "createdAt": utc_now(),
+        }
+        await self.user_repo.create(user_doc)
+        
+        token = self._create_access_token(email, role)
+        return {
+            "user": {
                 "name": name,
                 "email": email,
                 "role": role,
                 "department": department,
-                "passwordHash": password_hash,
-                "createdAt": utc_now(),
-            }
-        )
+            },
+            "accessToken": token
+        }
 
     async def login(self, email: str, password: str, role: str = "student") -> dict:
         user = await self.user_repo.find_by_email_and_role(email, role)
@@ -151,10 +186,34 @@ class AuthService:
             raise ValueError("Invalid email or password.")
 
         profile = user.get("profile") or {}
+        token = self._create_access_token(user.get("email", email), user.get("role", role))
+        
         return {
-            "name": user.get("name", "Student"),
-            "email": user.get("email", email),
-            "role": user.get("role", role) or role,
-            "department": user.get("department", "Computer Science"),
-            **profile,
+            "user": {
+                "name": user.get("name", "Student"),
+                "email": user.get("email", email),
+                "role": user.get("role", role) or role,
+                "department": user.get("department", "Computer Science"),
+                **profile,
+            },
+            "accessToken": token
         }
+
+    async def check_user_exists(self, email: str, role: str) -> bool:
+        user = await self.user_repo.find_by_email_and_role(email, role)
+        return user is not None
+
+    async def reset_password(self, email: str, new_password: str, role: str) -> None:
+        if not await self.verified_repo.is_verified(email):
+            raise ValueError("Email not verified. Please verify OTP before resetting password.")
+
+        user = await self.user_repo.find_by_email_and_role(email, role)
+        if user is None:
+            raise ValueError("User not found.")
+
+        try:
+            password_hash = _pwd.hash(new_password)
+        except PasswordSizeError:
+            raise ValueError("Password is too long. Please choose a shorter password.")
+
+        await self.user_repo.update_core_fields(email, role, {"passwordHash": password_hash})

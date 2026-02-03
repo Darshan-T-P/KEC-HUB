@@ -61,6 +61,8 @@ export type EventRegistrationItem = {
   createdAt: string;
 };
 
+import { authService } from "./auth";
+
 export const eventService = {
   createEvent: async (
     manager: Pick<User, "email" | "role">,
@@ -76,7 +78,7 @@ export const eventService = {
   ): Promise<{ success: boolean; message: string; eventId?: string | null }> => {
     const res = await fetch(`${API_BASE_URL}/events`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authService.getAuthHeaders(),
       body: JSON.stringify({
         managerEmail: manager.email,
         role: manager.role,
@@ -92,15 +94,52 @@ export const eventService = {
     return { success: false, message: await parseApiError(res) };
   },
 
+  updateEvent: async (
+    manager: Pick<User, "email" | "role">,
+    eventId: string,
+    payload: {
+      title?: string;
+      description?: string;
+      venue?: string;
+      startAt?: string;
+      endAt?: string;
+      allowedDepartments?: string[];
+      formFields?: EventFormField[];
+    }
+  ): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE_URL}/events/${encodeURIComponent(eventId)}`, {
+      method: "PUT",
+      headers: authService.getAuthHeaders(),
+      body: JSON.stringify({
+        managerEmail: manager.email,
+        role: manager.role,
+        ...payload,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      return (data || { success: true, message: "Event updated" }) as any;
+    }
+
+    return { success: false, message: await parseApiError(res) };
+  },
+
   listMine: async (manager: Pick<User, "email" | "role">): Promise<EventItem[]> => {
-    const res = await fetch(`${API_BASE_URL}/events/mine/${encodeURIComponent(manager.email)}?role=${encodeURIComponent(manager.role)}`);
+    const res = await fetch(
+      `${API_BASE_URL}/events/mine/${encodeURIComponent(manager.email)}?role=${encodeURIComponent(manager.role)}`,
+      { headers: authService.getAuthHeaders() }
+    );
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.events) ? (data.events as EventItem[]) : [];
   },
 
   listVisible: async (student: Pick<User, "email" | "role">): Promise<EventItem[]> => {
-    const res = await fetch(`${API_BASE_URL}/events/visible/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`);
+    const res = await fetch(
+      `${API_BASE_URL}/events/visible/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`,
+      { headers: authService.getAuthHeaders() }
+    );
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.events) ? (data.events as EventItem[]) : [];
@@ -114,10 +153,15 @@ export const eventService = {
     const form = new FormData();
     form.append("file", file);
 
+    const headers: Record<string, string> = {};
+    const token = authService.getAccessToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch(
       `${API_BASE_URL}/events/${encodeURIComponent(eventId)}/poster?email=${encodeURIComponent(manager.email)}&role=${encodeURIComponent(manager.role)}`,
       {
         method: "POST",
+        headers: headers,
         body: form,
       }
     );
@@ -137,7 +181,7 @@ export const eventService = {
   ): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE_URL}/events/${encodeURIComponent(eventId)}/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authService.getAuthHeaders(),
       body: JSON.stringify({
         studentEmail: student.email,
         studentRole: student.role,
@@ -158,7 +202,8 @@ export const eventService = {
     eventId: string
   ): Promise<EventRegistrationItem[]> => {
     const res = await fetch(
-      `${API_BASE_URL}/events/${encodeURIComponent(eventId)}/registrations?email=${encodeURIComponent(manager.email)}&role=${encodeURIComponent(manager.role)}`
+      `${API_BASE_URL}/events/${encodeURIComponent(eventId)}/registrations?email=${encodeURIComponent(manager.email)}&role=${encodeURIComponent(manager.role)}`,
+      { headers: authService.getAuthHeaders() }
     );
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
@@ -166,7 +211,10 @@ export const eventService = {
   },
 
   listMyRegistrations: async (student: Pick<User, "email" | "role">): Promise<EventRegistrationItem[]> => {
-    const res = await fetch(`${API_BASE_URL}/events/registrations/mine/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`);
+    const res = await fetch(
+      `${API_BASE_URL}/events/registrations/mine/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`,
+      { headers: authService.getAuthHeaders() }
+    );
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.registrations) ? (data.registrations as EventRegistrationItem[]) : [];
@@ -180,7 +228,7 @@ export const eventService = {
   ): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE_URL}/events/${encodeURIComponent(eventId)}/attendance`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authService.getAuthHeaders(),
       body: JSON.stringify({
         managerEmail: manager.email,
         role: manager.role,

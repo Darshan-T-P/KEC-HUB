@@ -47,9 +47,12 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
   const [customDept, setCustomDept] = useState("");
 
   const [fields, setFields] = useState<EventFormField[]>([
+    { key: "roll_no", label: "Roll Number", type: "text", required: true },
     { key: "full_name", label: "Full Name", type: "text", required: true },
     { key: "phone", label: "Phone Number", type: "text", required: true },
   ]);
+
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +146,44 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
     setAllowedDepartments((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
   };
 
+  const resetForm = () => {
+    setTitle("");
+    setDescription("");
+    setVenue("");
+    setStartAt("");
+    setEndAt("");
+    setAllDepts(true);
+    setAllowedDepartments([]);
+    setFields([
+      { key: "roll_no", label: "Roll Number", type: "text", required: true },
+      { key: "full_name", label: "Full Name", type: "text", required: true },
+      { key: "phone", label: "Phone Number", type: "text", required: true },
+    ]);
+    setCreatePosterFile(null);
+    setEditingEventId(null);
+  };
+
+  const editEvent = (ev: EventItem) => {
+    setEditingEventId(ev.id);
+    setTitle(ev.title);
+    setDescription(ev.description);
+    setVenue(ev.venue || "");
+    // Convert ISO to local for input
+    const toLocal = (iso: string) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+    };
+    setStartAt(toLocal(ev.startAt));
+    setEndAt(ev.endAt ? toLocal(ev.endAt) : "");
+    setAllDepts(ev.allowedDepartments.length === 0);
+    setAllowedDepartments(ev.allowedDepartments);
+    setFields(ev.formFields);
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const addCustomDept = () => {
     const d = customDept.trim();
     if (!d) return;
@@ -210,19 +251,21 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
       })),
     };
 
-    const res = await eventService.createEvent(user, payload);
+    let res;
+    if (editingEventId) {
+      res = await eventService.updateEvent(user, editingEventId, payload);
+    } else {
+      res = await eventService.createEvent(user, payload);
+    }
     if (res.success) {
-      setToast("Event created. Upload poster for better reach.");
-      setTitle("");
-      setDescription("");
-      setVenue("");
-      setStartAt("");
-      setEndAt("");
-      setAllDepts(true);
-      setAllowedDepartments([]);
+      setToast(editingEventId ? "Event updated." : "Event created. Upload poster for better reach.");
 
-      if (res.eventId && createPosterFile) {
-        const up = await eventService.uploadPoster(user, res.eventId, createPosterFile);
+      const newlyCreatedId = !editingEventId ? (res as any).eventId : null;
+
+      resetForm();
+
+      if (newlyCreatedId && createPosterFile) {
+        const up = await eventService.uploadPoster(user, newlyCreatedId, createPosterFile);
         if (up.success) {
           setToast("Event created and poster uploaded.");
         } else {
@@ -231,7 +274,6 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
         }
       }
 
-      setCreatePosterFile(null);
       await refresh();
       return;
     }
@@ -318,12 +360,22 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
         )}
 
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-slate-50 rounded-2xl border border-slate-100 p-6">
-            <h3 className="font-black text-slate-800">Create Event</h3>
+          <div className="bg-slate-50 rounded-2xl border border-slate-100 p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-slate-800">{editingEventId ? "Edit Event" : "Create Event"}</h3>
+              {editingEventId && (
+                <button
+                  onClick={resetForm}
+                  className="text-xs font-black text-indigo-600 hover:text-indigo-700"
+                >
+                  Clear & Create New
+                </button>
+              )}
+            </div>
 
             <div className="mt-4 space-y-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Title</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Title *</p>
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -332,7 +384,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
               </div>
 
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Description</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Description *</p>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -342,7 +394,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Start</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Start *</p>
                   <input
                     type="datetime-local"
                     value={startAt}
@@ -480,7 +532,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                     <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Label</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Label *</p>
                           <input
                             value={f.label}
                             onChange={(e) => {
@@ -491,7 +543,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                           />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Key</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Key *</p>
                           <input
                             value={f.key}
                             onChange={(e) => updateField(idx, { key: e.target.value })}
@@ -499,7 +551,7 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                           />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Type *</p>
                           <select
                             value={f.type}
                             onChange={(e) => updateField(idx, { type: e.target.value as any })}
@@ -542,9 +594,9 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
 
               <button
                 onClick={createEvent}
-                className="w-full mt-2 px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-indigo-700"
+                className="w-full mt-2 px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-indigo-700 transition-all active:scale-[0.98]"
               >
-                Create Event
+                {editingEventId ? "Update Event" : "Create Event"}
               </button>
             </div>
           </div>
@@ -574,13 +626,19 @@ const EventManagerEventsPage: React.FC<Props> = ({ user }) => {
                       <div className="flex gap-2 flex-wrap justify-end">
                         <button
                           onClick={() => { setUploadingFor(ev.id); setPosterFile(null); }}
-                          className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-xs"
+                          className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-xs border border-indigo-100"
                         >
-                          Upload Poster
+                          Poster
+                        </button>
+                        <button
+                          onClick={() => editEvent(ev)}
+                          className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-black text-xs border border-slate-200"
+                        >
+                          Edit
                         </button>
                         <button
                           onClick={() => openRegistrations(ev)}
-                          className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-black text-xs border border-slate-200"
+                          className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-xs shadow-sm hover:shadow-md transition-all"
                         >
                           Manage
                         </button>

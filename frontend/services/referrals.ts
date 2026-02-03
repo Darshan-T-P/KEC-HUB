@@ -16,6 +16,8 @@ export type ReferralRequestItem = {
   alumniNote?: string | null;
 };
 
+import { authService } from "./auth";
+
 export const referralService = {
   requestReferral: async (
     student: Pick<User, "email" | "role">,
@@ -25,7 +27,7 @@ export const referralService = {
   ): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE_URL}/referrals/request`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authService.getAuthHeaders(),
       body: JSON.stringify({
         studentEmail: student.email,
         studentRole: student.role,
@@ -39,14 +41,18 @@ export const referralService = {
   },
 
   inbox: async (alumni: Pick<User, "email" | "role">): Promise<ReferralRequestItem[]> => {
-    const res = await fetch(`${API_BASE_URL}/referrals/inbox/${encodeURIComponent(alumni.email)}?role=${encodeURIComponent(alumni.role)}`);
+    const res = await fetch(`${API_BASE_URL}/referrals/inbox/${encodeURIComponent(alumni.email)}?role=${encodeURIComponent(alumni.role)}`, {
+      headers: authService.getAuthHeaders(),
+    });
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.requests) ? (data.requests as ReferralRequestItem[]) : [];
   },
 
   outbox: async (student: Pick<User, "email" | "role">): Promise<ReferralRequestItem[]> => {
-    const res = await fetch(`${API_BASE_URL}/referrals/outbox/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`);
+    const res = await fetch(`${API_BASE_URL}/referrals/outbox/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`, {
+      headers: authService.getAuthHeaders(),
+    });
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.requests) ? (data.requests as ReferralRequestItem[]) : [];
@@ -60,7 +66,7 @@ export const referralService = {
   ): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE_URL}/referrals/${encodeURIComponent(requestId)}/decide`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authService.getAuthHeaders(),
       body: JSON.stringify({
         alumniEmail: alumni.email,
         alumniRole: alumni.role,

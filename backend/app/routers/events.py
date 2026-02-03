@@ -11,6 +11,7 @@ from ..models import (
     EventCreateRequest, 
     EventCreateResponse, 
     EventListResponse, 
+    EventUpdateRequest,
     EventItem,
     EventRegistrationCreate,
     EventRegistrationsResponse,
@@ -82,6 +83,11 @@ async def create_event(payload: EventCreateRequest, event_repo=Depends(get_event
         end_dt = _parse_dt(payload.endAt) if payload.endAt else None
         if end_dt and end_dt < start_dt:
             return EventCreateResponse(success=False, message="endAt must be after startAt.")
+            
+        # Duplicate check
+        existing = await event_repo.find_by_title_date_and_manager(payload.title, start_dt, str(payload.managerEmail))
+        if existing:
+            return EventCreateResponse(success=False, message="An event with the same title and start time already exists.")
     except ValueError:
         return EventCreateResponse(success=False, message="Invalid startAt/endAt datetime. Use ISO format.")
 
@@ -114,6 +120,57 @@ async def create_event(payload: EventCreateRequest, event_repo=Depends(get_event
         "createdAt": datetime.now(timezone.utc),
     })
     return EventCreateResponse(success=True, message="Event created.", eventId=event_id)
+
+@router.put("/{event_id}", response_model=ApiResponse)
+async def update_event(event_id: str, payload: EventUpdateRequest, event_repo=Depends(get_event_repo)) -> ApiResponse:
+    if not _is_allowed_domain(str(payload.managerEmail)):
+        return ApiResponse(success=False, message="Only @kongu.edu or @kongu.ac.in emails are permitted.")
+    if not mongodb_ok():
+        return ApiResponse(success=False, message="MongoDB is not connected.")
+    
+    if payload.role != "event_manager":
+        return ApiResponse(success=False, message="Role must be event_manager.")
+
+    update_doc = {}
+    if payload.title is not None: update_doc["title"] = payload.title
+    if payload.description is not None: update_doc["description"] = payload.description
+    if payload.venue is not None: update_doc["venue"] = payload.venue
+    
+    if payload.startAt is not None:
+        try:
+            update_doc["startAt"] = _parse_dt(payload.startAt)
+        except ValueError:
+            return ApiResponse(success=False, message="Invalid startAt datetime.")
+            
+    if payload.endAt is not None:
+        try:
+            update_doc["endAt"] = _parse_dt(payload.endAt)
+        except ValueError:
+            return ApiResponse(success=False, message="Invalid endAt datetime.")
+
+    if payload.allowedDepartments is not None:
+        allowed = [d.strip() for d in payload.allowedDepartments if str(d).strip()]
+        if any(d.strip().lower() in {"all", "*"} for d in allowed):
+            allowed = []
+        update_doc["allowedDepartments"] = allowed
+        update_doc["allowedDepartmentsLower"] = [d.lower() for d in allowed]
+
+    if payload.formFields is not None:
+        seen_keys = set()
+        for f in payload.formFields:
+            if f.key in seen_keys:
+                return ApiResponse(success=False, message=f"Duplicate form field key: {f.key}")
+            seen_keys.add(f.key)
+        update_doc["formFields"] = [f.model_dump() for f in payload.formFields]
+
+    if not update_doc:
+        return ApiResponse(success=True, message="No changes provided.")
+
+    ok = await event_repo.update(event_id, str(payload.managerEmail), update_doc)
+    if not ok:
+        return ApiResponse(success=False, message="Event not found or not owned by you.")
+    
+    return ApiResponse(success=True, message="Event updated.")
 
 @router.get("/mine/{email}", response_model=EventListResponse)
 async def list_my_events(email: str, role: UserRole = "event_manager", limit: int = Query(default=100, ge=1, le=300), event_repo=Depends(get_event_repo)) -> EventListResponse:

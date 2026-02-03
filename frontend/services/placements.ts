@@ -22,6 +22,15 @@ export type PlacementResourceItem = {
   url: string;
 };
 
+export type PlacementRound = {
+  roundNumber: number;
+  name: string;
+  description?: string | null;
+  selectedStudents: string[];
+  uploadedAt?: string | null;
+  uploadedBy?: string | null;
+};
+
 export type PlacementItem = {
   id: string;
   staffEmail: string;
@@ -37,9 +46,15 @@ export type PlacementItem = {
   minCgpa?: number | null;
   maxArrears?: number | null;
   resources: PlacementResourceItem[];
+  rounds: PlacementRound[];
   createdAt: string;
   score?: number;
   reasons?: string[];
+};
+
+export type PlacementRoundPayload = {
+  name: string;
+  description?: string;
 };
 
 export type PlacementCreatePayload = {
@@ -55,7 +70,10 @@ export type PlacementCreatePayload = {
   minCgpa?: number;
   maxArrears?: number;
   resources: PlacementResourceItem[];
+  rounds?: PlacementRoundPayload[];
 };
+
+import { authService } from "./auth";
 
 export const placementService = {
   createNotice: async (
@@ -64,7 +82,7 @@ export const placementService = {
   ): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE_URL}/placements`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authService.getAuthHeaders(),
       body: JSON.stringify({
         staffEmail: staff.email,
         role: staff.role,
@@ -82,7 +100,8 @@ export const placementService = {
 
   listMine: async (staff: Pick<User, "email" | "role">): Promise<PlacementItem[]> => {
     const res = await fetch(
-      `${API_BASE_URL}/placements/mine/${encodeURIComponent(staff.email)}?role=${encodeURIComponent(staff.role)}`
+      `${API_BASE_URL}/placements/mine/${encodeURIComponent(staff.email)}?role=${encodeURIComponent(staff.role)}`,
+      { headers: authService.getAuthHeaders() }
     );
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
@@ -91,7 +110,8 @@ export const placementService = {
 
   listVisible: async (student: Pick<User, "email" | "role">): Promise<PlacementItem[]> => {
     const res = await fetch(
-      `${API_BASE_URL}/placements/visible/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`
+      `${API_BASE_URL}/placements/visible/${encodeURIComponent(student.email)}?role=${encodeURIComponent(student.role)}`,
+      { headers: authService.getAuthHeaders() }
     );
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
@@ -103,7 +123,8 @@ export const placementService = {
     noticeId: string
   ): Promise<{ success: boolean; message: string; blob?: Blob }> => {
     const res = await fetch(
-      `${API_BASE_URL}/placements/${encodeURIComponent(noticeId)}/export?email=${encodeURIComponent(staff.email)}&role=${encodeURIComponent(staff.role)}`
+      `${API_BASE_URL}/placements/${encodeURIComponent(noticeId)}/export?email=${encodeURIComponent(staff.email)}&role=${encodeURIComponent(staff.role)}`,
+      { headers: authService.getAuthHeaders() }
     );
 
     if (!res.ok) {
@@ -112,5 +133,40 @@ export const placementService = {
 
     const blob = await res.blob();
     return { success: true, message: "ok", blob };
+  },
+
+  uploadRoundStudents: async (
+    staff: Pick<User, "email" | "role">,
+    noticeId: string,
+    roundNumber: number,
+    file: File
+  ): Promise<{ success: boolean; message: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+
+    const headers = authService.getAuthHeaders();
+    // Remove Content-Type so the browser sets it with the boundary for FormData
+    const filteredHeaders: Record<string, string> = {};
+    for (const [k, v] of Object.entries(headers)) {
+      if (k.toLowerCase() !== "content-type") {
+        filteredHeaders[k] = v;
+      }
+    }
+
+    const res = await fetch(
+      `${API_BASE_URL}/placements/${encodeURIComponent(noticeId)}/rounds/${roundNumber}/upload?email=${encodeURIComponent(staff.email)}&role=${encodeURIComponent(staff.role)}`,
+      {
+        method: "POST",
+        headers: filteredHeaders,
+        body: form,
+      }
+    );
+
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      return (data || { success: true, message: "Students uploaded" }) as any;
+    }
+
+    return { success: false, message: await parseApiError(res) };
   },
 };

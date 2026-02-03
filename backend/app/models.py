@@ -76,6 +76,7 @@ class UserProfile(UserPublic):
 
 class AuthUserResponse(ApiResponse):
     user: UserProfile | None = None
+    accessToken: str | None = None
 
 
 class ProfileResponse(ApiResponse):
@@ -137,6 +138,17 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+    role: UserRole = "student"
+
+
+class CheckUserRequest(BaseModel):
+    email: EmailStr
+    role: UserRole = "student"
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    new_password: str = Field(min_length=8, max_length=128)
     role: UserRole = "student"
 
 
@@ -227,6 +239,11 @@ class PlacementResourceItem(BaseModel):
     url: str = Field(min_length=1, max_length=500)
 
 
+class PlacementRoundInfo(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+
+
 class PlacementCreateRequest(BaseModel):
     staffEmail: EmailStr
     role: UserRole = "management"
@@ -247,6 +264,9 @@ class PlacementCreateRequest(BaseModel):
     maxArrears: int | None = Field(default=None, ge=0, le=99)
 
     resources: list[PlacementResourceItem] = Field(default_factory=list, max_length=30)
+    
+    # Rounds information
+    rounds: list[PlacementRoundInfo] = Field(default_factory=list, max_length=20)
 
     @field_validator(
         "instructions",
@@ -265,9 +285,18 @@ class PlacementCreateRequest(BaseModel):
         return v
 
 
+class PlacementRound(BaseModel):
+    roundNumber: int
+    name: str
+    description: str | None = None
+    selectedStudents: list[str] = Field(default_factory=list)  # List of student emails
+    uploadedAt: str | None = None
+    uploadedBy: str | None = None
+
+
 class PlacementItem(BaseModel):
     id: str
-    staffEmail: EmailStr
+    staffEmail: str
     companyName: str
     title: str
     description: str
@@ -280,6 +309,7 @@ class PlacementItem(BaseModel):
     minCgpa: float | None = None
     maxArrears: int | None = None
     resources: list[PlacementResourceItem] = Field(default_factory=list)
+    rounds: list[PlacementRound] = Field(default_factory=list)
     createdAt: str
     score: float = 0.0
     reasons: list[str] = Field(default_factory=list)
@@ -287,6 +317,53 @@ class PlacementItem(BaseModel):
 
 class PlacementListResponse(ApiResponse):
     notices: list[PlacementItem] = Field(default_factory=list)
+
+
+class StudentRoundStatus(BaseModel):
+    placementId: str
+    companyName: str
+    title: str
+    roundNumber: int
+    roundName: str
+    notifiedAt: str
+
+
+class StudentPlacementStatusResponse(ApiResponse):
+    selections: list[StudentRoundStatus] = Field(default_factory=list)
+
+
+class InterviewRound(BaseModel):
+    roundName: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=1, max_length=2000)
+
+
+class PlacementExperienceCreateRequest(BaseModel):
+    studentEmail: EmailStr
+    studentRole: UserRole = "student"
+    companyName: str = Field(min_length=2, max_length=120)
+    jobRole: str = Field(min_length=2, max_length=120)
+    interviewDate: str  # ISO date string (YYYY-MM-DD)
+    rounds: list[InterviewRound] = Field(min_length=1, max_length=10)
+    difficultyLevel: int = Field(ge=1, le=5)
+    overallExperience: str = Field(min_length=10, max_length=5000)
+
+
+class PlacementExperienceItem(BaseModel):
+    id: str
+    studentEmail: EmailStr
+    studentName: str | None = None
+    studentDepartment: str | None = None
+    companyName: str
+    jobRole: str
+    interviewDate: str
+    rounds: list[InterviewRound]
+    difficultyLevel: int
+    overallExperience: str
+    createdAt: str
+
+
+class PlacementExperienceListResponse(ApiResponse):
+    experiences: list[PlacementExperienceItem] = Field(default_factory=list)
 
 
 class ManagementInstructionCreateRequest(BaseModel):
@@ -472,6 +549,18 @@ class EventCreateRequest(BaseModel):
             # Empty list means visible to all.
             return cleaned
         return v
+
+
+class EventUpdateRequest(BaseModel):
+    managerEmail: EmailStr
+    role: UserRole = "event_manager"
+    title: str | None = Field(default=None, min_length=3, max_length=200)
+    description: str | None = Field(default=None, min_length=3, max_length=6000)
+    venue: str | None = Field(default=None, max_length=200)
+    startAt: str | None = Field(default=None, min_length=10, max_length=64)
+    endAt: str | None = Field(default=None, max_length=64)
+    allowedDepartments: list[str] | None = None
+    formFields: list[EventFormField] | None = None
 
 
 class EventItem(BaseModel):

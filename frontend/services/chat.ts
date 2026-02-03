@@ -19,9 +19,13 @@ export type ChatMessage = {
   createdAt: string;
 };
 
+import { authService } from "./auth";
+
 export const chatService = {
   listThreads: async (user: Pick<User, "email" | "role">): Promise<ChatThread[]> => {
-    const res = await fetch(`${API_BASE_URL}/chat/threads/${encodeURIComponent(user.email)}?role=${encodeURIComponent(user.role)}`);
+    const res = await fetch(`${API_BASE_URL}/chat/threads/${encodeURIComponent(user.email)}?role=${encodeURIComponent(user.role)}`, {
+      headers: authService.getAuthHeaders(),
+    });
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.threads) ? (data.threads as ChatThread[]) : [];
@@ -29,7 +33,10 @@ export const chatService = {
 
   listMessages: async (user: Pick<User, "email" | "role">, threadId: string): Promise<ChatMessage[]> => {
     const res = await fetch(
-      `${API_BASE_URL}/chat/messages/${encodeURIComponent(threadId)}?email=${encodeURIComponent(user.email)}&role=${encodeURIComponent(user.role)}`
+      `${API_BASE_URL}/chat/messages/${encodeURIComponent(threadId)}?email=${encodeURIComponent(user.email)}&role=${encodeURIComponent(user.role)}`,
+      {
+        headers: authService.getAuthHeaders(),
+      }
     );
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
@@ -44,7 +51,7 @@ export const chatService = {
   ): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE_URL}/chat/send`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authService.getAuthHeaders(),
       body: JSON.stringify({
         senderEmail: sender.email,
         senderRole: sender.role,

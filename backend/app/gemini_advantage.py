@@ -41,31 +41,27 @@ class GeminiAdvantageService:
     ) -> dict[str, Any]:
         """
         Generate strategic interview preparation plan using Groq.
-        
-        Args:
-            target_role: Target job role (e.g., "Software Engineer")
-            company: Optional company name for company-specific prep
-            skills: User's technical skills
-            experience_level: Experience level (entry-level/mid-level/senior)
-            
-        Returns:
-            Dict with strategic prep plan and resources
         """
         skills_str = ", ".join(skills[:10]) if skills else "general programming"
         company_info = f" at {company}" if company else ""
         
+        system_prompt = (
+            "You are an expert career counselor. Return STRICT JSON objects only. "
+            "Do not include any conversational preamble or post-amble."
+        )
+
         prompt = (
             f"Create a comprehensive strategic interview preparation plan for a {experience_level} "
             f"{target_role} role{company_info}. "
-            f"Candidate's skills: {skills_str}.\n\n"
+            f"Candidate profile: {skills_str}.\n\n"
             "Include:\n"
-            "1. Company research points (if company specified)\n"
-            "2. Technical topics to study (prioritized list)\n"
+            "1. Company research points\n"
+            "2. Technical roadmap (prioritized study topics)\n"
             "3. Common interview patterns for this role\n"
             "4. Projects/portfolio suggestions\n"
-            "5. Week-by-week study timeline (4 weeks)\n"
-            "6. Recommended resources and study materials\n\n"
-            "Respond in JSON format with these exact keys:\n"
+            "5. 4-week study timeline\n"
+            "6. Recommended resources\n\n"
+            "Respond in JSON format with EXACT keys:\n"
             '{"company_insights": {"culture": "...", "key_focus_areas": [...]}, '
             '"technical_roadmap": {"priority_topics": [...], "timeline": "..."}, '
             '"interview_patterns": [...], '
@@ -77,9 +73,13 @@ class GeminiAdvantageService:
         # Use Groq chat completion API
         req = {
             "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.4,
             "max_tokens": 2500,
+            "response_format": {"type": "json_object"},
         }
 
         url = f"{self.base_url}/chat/completions"
@@ -93,18 +93,6 @@ class GeminiAdvantageService:
                 resp = await client.post(url, json=req, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
-            except httpx.HTTPStatusError as e:
-                status = e.response.status_code if e.response is not None else None
-                body = ""
-                try:
-                    body = (e.response.text or "")[:1200]
-                except Exception:
-                    body = ""
-                log.error("Groq strategic prep failed (status=%s).", status)
-                log.error("Request: %s", json.dumps(req, indent=2))
-                if body:
-                    log.error("Error body: %s", body)
-                return {"error": f"Strategic prep generation failed (status={status}): {body[:200]}"}
             except Exception as e:
                 log.error("Groq strategic prep failed (%s): %s", type(e).__name__, str(e))
                 return {"error": f"Strategic prep generation failed: {type(e).__name__}"}
@@ -114,31 +102,23 @@ class GeminiAdvantageService:
             if not choices:
                 return {"error": "No response from Groq"}
             
-            message = choices[0].get("message", {})
-            content_text = message.get("content", "")
-            
+            content_text = choices[0].get("message", {}).get("content", "")
             if not content_text:
                 return {"error": "Empty response"}
             
-            # Try to extract JSON from the response
-            result = {}
+            # Robust extraction
+            content_text = content_text.strip()
             try:
-                # Sometimes the model wraps JSON in code blocks
-                if "```json" in content_text:
-                    json_start = content_text.find("```json") + 7
-                    json_end = content_text.find("```", json_start)
-                    content_text = content_text[json_start:json_end].strip()
-                elif "```" in content_text:
-                    json_start = content_text.find("```") + 3
-                    json_end = content_text.find("```", json_start)
-                    content_text = content_text[json_start:json_end].strip()
-                    
-                result = json.loads(content_text)
-            except Exception:
-                # If not valid JSON, return as is
-                result = {"raw_response": content_text}
-            
-            return result
+                return json.loads(content_text)
+            except json.JSONDecodeError:
+                import re
+                match = re.search(r"\{[\s\S]*\}", content_text)
+                if match:
+                    try:
+                        return json.loads(match.group(0))
+                    except Exception:
+                        pass
+                return {"error": "Failed to parse JSON response", "raw": content_text[:200]}
         except Exception as e:
             log.warning("Failed to parse Groq response (%s).", type(e).__name__)
             return {"error": "Failed to parse response", "details": str(e)}
@@ -152,15 +132,6 @@ class GeminiAdvantageService:
     ) -> dict[str, Any]:
         """
         Generate AI-powered cover letter using Groq.
-        
-        Args:
-            job_title: Job title
-            company: Company name
-            job_description: Full job description
-            user_profile: User profile with name, skills, experience, projects
-            
-        Returns:
-            Dict with cover letter and key highlights
         """
         name = user_profile.get("name", "Candidate")
         skills = user_profile.get("skills", [])
@@ -175,6 +146,11 @@ class GeminiAdvantageService:
         
         achievements_str = "\n".join([f"- {a}" for a in achievements[:3]]) if achievements else "No achievements listed"
         
+        system_prompt = (
+            "You are an expert resume writer. Return STRICT JSON objects only. "
+            "Do not include any conversational text."
+        )
+
         prompt = (
             f"Write a professional, compelling cover letter for {name} applying to the {job_title} "
             f"position at {company}.\n\n"
@@ -186,10 +162,8 @@ class GeminiAdvantageService:
             "Requirements:\n"
             "1. Professional tone, 250-350 words\n"
             "2. Highlight relevant skills and experiences\n"
-            "3. Show enthusiasm for the company\n"
-            "4. Connect candidate's background to job requirements\n"
-            "5. Include specific examples from projects/achievements\n\n"
-            "Return JSON with: "
+            "3. Connect candidate's background to job requirements\n\n"
+            "Return JSON with EXACT keys: "
             "{\"cover_letter\": \"full letter text\", "
             "\"key_highlights\": [\"point1\", \"point2\", ...], "
             "\"customization_tips\": [\"tip1\", \"tip2\", ...]}"
@@ -197,9 +171,13 @@ class GeminiAdvantageService:
 
         req = {
             "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.8,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.6,
             "max_tokens": 1500,
+            "response_format": {"type": "json_object"},
         }
 
         url = f"{self.base_url}/chat/completions"
@@ -213,48 +191,37 @@ class GeminiAdvantageService:
                 resp = await client.post(url, json=req, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
-                
-                choices = data.get("choices", [])
-                if not choices:
-                    return {"error": "No response from Groq"}
-                
-                content = choices[0].get("message", {}).get("content", "")
-                
-                if not content:
-                    return {"error": "Empty response"}
-                
-                # Extract JSON from potential code block wrapping
-                raw_text = content.strip()
-                if raw_text.startswith("```json"):
-                    raw_text = raw_text[7:]
-                if raw_text.startswith("```"):
-                    raw_text = raw_text[3:]
-                if raw_text.endswith("```"):
-                    raw_text = raw_text[:-3]
-                raw_text = raw_text.strip()
-                
-                try:
-                    result = json.loads(raw_text)
-                except json.JSONDecodeError:
-                    result = {
-                        "cover_letter": raw_text,
-                        "key_highlights": [],
-                        "customization_tips": []
-                    }
-                
-                return result
-            except httpx.HTTPStatusError as e:
-                status = e.response.status_code if e.response is not None else None
-                body = ""
-                try:
-                    body = (e.response.text or "")[:1200]
-                except Exception:
-                    body = ""
-                log.error("Groq cover letter generation failed (status=%s).", status)
-                log.error("Request: %s", json.dumps(req, indent=2))
-                if body:
-                    log.error("Error body: %s", body)
-                return {"error": f"Cover letter generation failed (status={status}): {body[:200]}"}
             except Exception as e:
                 log.error("Groq cover letter generation failed (%s): %s", type(e).__name__, str(e))
                 return {"error": f"Cover letter generation failed: {type(e).__name__}"}
+                
+        try:
+            choices = data.get("choices", [])
+            if not choices:
+                return {"error": "No response from Groq"}
+            
+            content = choices[0].get("message", {}).get("content", "")
+            if not content:
+                return {"error": "Empty response"}
+            
+            # Robust extraction
+            content = content.strip()
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                import re
+                match = re.search(r"\{[\s\S]*\}", content)
+                if match:
+                    try:
+                        return json.loads(match.group(0))
+                    except Exception:
+                        pass
+                return {
+                    "cover_letter": content,
+                    "key_highlights": [],
+                    "customization_tips": ["Check response formatting"],
+                    "error": "Failed to parse JSON"
+                }
+        except Exception as e:
+            log.warning("Failed to parse response (%s).", type(e).__name__)
+            return {"error": str(e)}

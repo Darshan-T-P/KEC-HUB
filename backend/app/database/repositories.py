@@ -52,6 +52,37 @@ class VerifiedEmailRepository:
         return doc is not None
 
 
+class AuthorizedEmailRepository:
+    """Repository to check emails against an authorized list in another database/collection."""
+    def __init__(self, db: AsyncIOMotorDatabase):
+        # The user's collection uses 'sheet1'
+        self.col = db["sheet1"]
+
+    async def is_authorized(self, email: str) -> bool:
+        if not email:
+            return False
+            
+        search_email = email.strip().lower()
+        
+        # The debug showed field name is 'Email ID' and some have trailing spaces.
+        # We'll use a case-insensitive regex that also ignores trailing whitespace in the DB.
+        import re
+        pattern = re.compile(f"^{re.escape(search_email)}\\s*$", re.IGNORECASE)
+        
+        # Check 'Email ID' field
+        doc = await self.col.find_one({"Email ID": pattern})
+        if doc:
+            return True
+            
+        # Fallback to other common field names just in case
+        doc = await self.col.find_one({"email": pattern})
+        if doc:
+            return True
+            
+        doc = await self.col.find_one({"Email": pattern})
+        return doc is not None
+
+
 class UserRepository:
     def __init__(self, db: AsyncIOMotorDatabase):
         self.col = db["users"]
@@ -186,6 +217,21 @@ class EventRepository:
         }
         cur = self.col.find(q, sort=[("startAt", 1), ("createdAt", -1)]).limit(int(limit))
         return [d async for d in cur]
+
+    async def find_by_title_date_and_manager(self, title: str, start_at: datetime, manager_email: str) -> Optional[Dict[str, Any]]:
+        return await self.col.find_one({
+            "title": title,
+            "startAt": start_at,
+            "managerEmail": manager_email
+        })
+
+    async def update(self, event_id: str, manager_email: str, update_doc: Dict[str, Any]) -> bool:
+        try:
+            oid = ObjectId(event_id)
+        except Exception:
+            return False
+        res = await self.col.update_one({"_id": oid, "managerEmail": manager_email}, {"$set": update_doc})
+        return bool(res.matched_count)
 
     async def set_poster(self, event_id: str, manager_email: str, poster_meta: Dict[str, Any]) -> bool:
         try:
@@ -382,6 +428,26 @@ class PlacementRepository:
         q: Dict[str, Any] = {"$and": [dept_filter, cgpa_filter, arrears_filter]}
         cur = self.col.find(q, sort=[("createdAt", -1)]).limit(int(limit))
         return [d async for d in cur]
+
+    async def update_round_students(self, notice_id: str, round_number: int, students: list[str], staff_email: str) -> bool:
+        try:
+            oid = ObjectId(notice_id)
+        except Exception:
+            return False
+            
+        # Update the specific round's selectedStudents and uploadedAt
+        # We use $[round] filtered positional operator
+        res = await self.col.update_one(
+            {"_id": oid, "staffEmail": staff_email, "rounds.roundNumber": round_number},
+            {
+                "$set": {
+                    "rounds.$.selectedStudents": students,
+                    "rounds.$.uploadedAt": datetime.now(timezone.utc),
+                    "rounds.$.uploadedBy": staff_email
+                }
+            }
+        )
+        return bool(res.matched_count)
 
 
 class ManagementInstructionRepository:

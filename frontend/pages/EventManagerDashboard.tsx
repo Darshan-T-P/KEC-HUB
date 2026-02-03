@@ -1,5 +1,5 @@
-
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User } from '../types';
 import { EventItem } from '../services/events';
 
@@ -10,7 +10,6 @@ interface EventManagerDashboardProps {
     managerEvents: EventItem[];
     managerRegsByEvent: Record<string, number>;
     loadManagerDashboard: () => Promise<void>;
-    setActiveTab: (tab: string) => void;
     handleLogout: () => void;
 }
 
@@ -21,9 +20,9 @@ const EventManagerDashboard: React.FC<EventManagerDashboardProps> = ({
     managerEvents,
     managerRegsByEvent,
     loadManagerDashboard,
-    setActiveTab,
     handleLogout
 }) => {
+    const navigate = useNavigate();
     const totalEvents = managerEvents.length;
     const totalRegs = (Object.values(managerRegsByEvent) as number[]).reduce((a, b) => a + (b || 0), 0);
     const now = Date.now();
@@ -69,7 +68,7 @@ const EventManagerDashboard: React.FC<EventManagerDashboardProps> = ({
                         Refresh
                     </button>
                     <button
-                        onClick={() => setActiveTab('events_manage')}
+                        onClick={() => navigate('/events-manage')}
                         className="flex items-center gap-3 px-8 py-4 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-slate-800 transition-all group"
                     >
                         Manage Events
@@ -120,7 +119,7 @@ const EventManagerDashboard: React.FC<EventManagerDashboardProps> = ({
                                                 <p className="text-2xl font-black text-slate-900">{managerRegsByEvent[e.id] ?? '—'}</p>
                                             </div>
                                             <button
-                                                onClick={() => setActiveTab('events_manage')}
+                                                onClick={() => navigate('/events-manage')}
                                                 className="px-5 py-3 bg-slate-900 text-white font-black rounded-2xl text-sm hover:bg-slate-800 transition-all"
                                             >
                                                 Open
@@ -135,7 +134,7 @@ const EventManagerDashboard: React.FC<EventManagerDashboardProps> = ({
                                 <h4 className="text-xl font-black text-slate-800">No events yet</h4>
                                 <p className="text-slate-400 font-bold mt-2 max-w-xs mx-auto">Create your first event to start collecting registrations.</p>
                                 <button
-                                    onClick={() => setActiveTab('events_manage')}
+                                    onClick={() => navigate('/events-manage')}
                                     className="mt-6 px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-700 transition-all"
                                 >
                                     Create Event

@@ -1,5 +1,5 @@
-
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User } from '../types';
 import { AlumniPost } from '../services/alumni';
 import { ReferralRequestItem } from '../services/referrals';
@@ -11,7 +11,6 @@ interface AlumniDashboardProps {
     alumniPosts: AlumniPost[];
     alumniRequests: ReferralRequestItem[];
     loadAlumniDashboard: () => Promise<void>;
-    setActiveTab: (tab: string) => void;
     handleLogout: () => void;
 }
 
@@ -22,9 +21,9 @@ const AlumniDashboard: React.FC<AlumniDashboardProps> = ({
     alumniPosts,
     alumniRequests,
     loadAlumniDashboard,
-    setActiveTab,
     handleLogout
 }) => {
+    const navigate = useNavigate();
     const totalPosts = alumniPosts.length;
     const pending = alumniRequests.filter(r => r.status === 'pending').length;
     const approved = alumniRequests.filter(r => r.status === 'approved').length;
@@ -69,7 +68,7 @@ const AlumniDashboard: React.FC<AlumniDashboardProps> = ({
                         Refresh
                     </button>
                     <button
-                        onClick={() => setActiveTab('alumni_posts')}
+                        onClick={() => navigate('/alumni-posts')}
                         className="flex items-center gap-3 px-8 py-4 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-slate-800 transition-all group"
                     >
                         Create / Manage Posts
@@ -98,7 +97,7 @@ const AlumniDashboard: React.FC<AlumniDashboardProps> = ({
                             Pending Referral Requests
                         </h3>
                         <button
-                            onClick={() => setActiveTab('alumni_requests')}
+                            onClick={() => navigate('/referrals')}
                             className="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-2 rounded-full border border-indigo-100 hover:bg-indigo-100 transition-all"
                         >
                             Open Referrals →
@@ -135,7 +134,7 @@ const AlumniDashboard: React.FC<AlumniDashboardProps> = ({
                                             </div>
                                             <div className="flex gap-3">
                                                 <button
-                                                    onClick={() => setActiveTab('alumni_requests')}
+                                                    onClick={() => navigate('/referrals')}
                                                     className="px-6 py-3 bg-slate-900 text-white font-black rounded-2xl text-sm hover:bg-slate-800 transition-all"
                                                 >
                                                     Review
@@ -150,6 +149,19 @@ const AlumniDashboard: React.FC<AlumniDashboardProps> = ({
                 </div>
 
                 <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-indigo-200">
+                        <h4 className="font-black text-xl mb-3">AI Coach 🤖</h4>
+                        <p className="text-sm text-indigo-100 font-bold mb-6 leading-relaxed">
+                            Need help preparing students or for your own senior interviews? Try our AI Coach.
+                        </p>
+                        <button
+                            onClick={() => navigate('/ai-coach')}
+                            className="w-full py-4 bg-white text-indigo-600 font-black rounded-2xl text-sm shadow-xl hover:bg-indigo-50 transition-all active:scale-95"
+                        >
+                            Start Coaching
+                        </button>
+                    </div>
+
                     <div className="bg-white p-6 rounded-3xl border border-slate-100">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-black text-slate-800 flex items-center gap-3">
@@ -157,7 +169,7 @@ const AlumniDashboard: React.FC<AlumniDashboardProps> = ({
                                 Recent Posts
                             </h3>
                             <button
-                                onClick={() => setActiveTab('alumni_posts')}
+                                onClick={() => navigate('/alumni-posts')}
                                 className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-2 rounded-full border border-indigo-100 hover:bg-indigo-100 transition-all uppercase tracking-widest"
                             >
                                 Open
@@ -182,13 +194,13 @@ const AlumniDashboard: React.FC<AlumniDashboardProps> = ({
                         <h4 className="font-black text-xl mb-3">Quick Actions</h4>
                         <div className="space-y-3">
                             <button
-                                onClick={() => setActiveTab('alumni_posts')}
+                                onClick={() => navigate('/alumni-posts')}
                                 className="w-full py-4 bg-white text-slate-900 font-black rounded-2xl text-sm hover:bg-slate-100 transition-all"
                             >
                                 Post Opportunity
                             </button>
                             <button
-                                onClick={() => setActiveTab('alumni_requests')}
+                                onClick={() => navigate('/referrals')}
                                 className="w-full py-4 bg-slate-800 text-white font-black rounded-2xl text-sm hover:bg-slate-700 transition-all"
                             >
                                 Review Referrals

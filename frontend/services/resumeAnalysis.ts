@@ -1,4 +1,5 @@
 import { User } from "../types";
+import { authService } from "./auth";
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -52,9 +53,13 @@ export const resumeAnalysisService = {
     form.append("jobDescription", payload.jobDescription);
     form.append("file", payload.resumeFile);
 
+    const headers: Record<string, string> = {};
+    const token = authService.getAccessToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     const res = await fetch(
       `${API_BASE_URL}/resume/analyze?email=${encodeURIComponent(student.email)}&role=${encodeURIComponent(student.role)}`,
-      { method: "POST", body: form }
+      { method: "POST", headers, body: form }
     );
 
     if (res.ok) {

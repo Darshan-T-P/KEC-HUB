@@ -26,11 +26,12 @@ type Props = {
   user: User;
   onUserUpdated: (user: User) => void;
   onSignOut: () => void;
+  isFirstTime?: boolean;
 };
 
-const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
+const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut, isFirstTime }) => {
   const [loading, setLoading] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(!!isFirstTime);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +115,22 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
   const saveProfile = async () => {
     setMessage(null);
     setError(null);
+
+    // Mandatory fields check for first time
+    if (isFirstTime) {
+      if (!form.name || form.name.trim().length < 3) {
+        setError('Full name is required (min 3 chars)');
+        return;
+      }
+      if (user.role === 'student' && !form.roll_number) {
+        setError('Roll number is required for students');
+        return;
+      }
+      if (!form.phone_number) {
+        setError('Phone number is required');
+        return;
+      }
+    }
 
     // Validations
     if (form.name && form.name.trim().length < 3) {
@@ -200,6 +217,19 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
 
   return (
     <div className="p-10 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {isFirstTime && (
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-10 rounded-[3rem] text-white shadow-2xl shadow-indigo-200 relative overflow-hidden">
+          <div className="relative z-10">
+            <h2 className="text-4xl font-black mb-4">Welcome to KEC Career Hub! 🎓</h2>
+            <p className="text-lg font-bold opacity-90 max-w-2xl">
+              Setting up your profile is the first step towards your dream career.
+              Complete your details below to unlock personalized job recommendations, alumni mentorship, and AI-powered career coaching.
+            </p>
+          </div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        </div>
+      )}
+
       <div className="bg-white p-12 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-10">
         <div className="w-32 h-32 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-5xl font-black text-white shadow-2xl shadow-indigo-100">
           {initials}
@@ -211,12 +241,14 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
           {loading && <p className="mt-3 text-xs font-bold text-slate-400">Loading profile…</p>}
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={() => setEditing(e => !e)}
-            className="px-8 py-4 bg-slate-900 text-white font-black rounded-2xl text-sm hover:bg-slate-800 transition-all"
-          >
-            {editing ? 'Close Edit' : 'Edit Profile'}
-          </button>
+          {!isFirstTime && (
+            <button
+              onClick={() => setEditing(e => !e)}
+              className="px-8 py-4 bg-slate-900 text-white font-black rounded-2xl text-sm hover:bg-slate-800 transition-all"
+            >
+              {editing ? 'Close Edit' : 'Edit Profile'}
+            </button>
+          )}
           <button
             onClick={onSignOut}
             className="px-8 py-4 bg-rose-50 text-rose-600 font-black rounded-2xl text-sm border border-rose-100 hover:bg-rose-100 transition-all"
@@ -358,7 +390,7 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
             <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Name</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Name *</label>
                   <input
                     value={form.name || ''}
                     onChange={e => setField('name', e.target.value)}
@@ -366,7 +398,7 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Department</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Department *</label>
                   <input
                     value={form.department || ''}
                     onChange={e => setField('department', e.target.value)}
@@ -375,7 +407,7 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
                 </div>
                 {(profile as any).role === 'student' ? (
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Roll No</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Roll No *</label>
                     <input
                       value={(form as any).roll_number || ''}
                       onChange={e => setField('roll_number' as any, e.target.value || undefined)}
@@ -536,7 +568,7 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Title</label>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Title *</label>
                           <input
                             value={p.title}
                             onChange={e => setProjects(prev => prev.map((x, i) => (i === idx ? { ...x, title: e.target.value } : x)))}
@@ -553,7 +585,7 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
                         </div>
                       </div>
                       <div className="mt-4">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Description</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Description *</label>
                         <textarea
                           value={p.description}
                           onChange={e => setProjects(prev => prev.map((x, i) => (i === idx ? { ...x, description: e.target.value } : x)))}
@@ -572,14 +604,16 @@ const ProfilePage: React.FC<Props> = ({ user, onUserUpdated, onSignOut }) => {
                   disabled={saving}
                   className="px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl text-sm shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50"
                 >
-                  {saving ? 'Saving…' : 'Save Changes'}
+                  {saving ? 'Saving…' : (isFirstTime ? 'Complete Registration' : 'Save Changes')}
                 </button>
-                <button
-                  onClick={() => setEditing(false)}
-                  className="px-8 py-4 bg-slate-100 text-slate-600 font-black rounded-2xl text-sm border border-slate-200 hover:bg-slate-200 transition-all"
-                >
-                  Cancel
-                </button>
+                {!isFirstTime && (
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="px-8 py-4 bg-slate-100 text-slate-600 font-black rounded-2xl text-sm border border-slate-200 hover:bg-slate-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
             </div>
           )}

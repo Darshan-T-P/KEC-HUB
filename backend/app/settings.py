@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db: str = "kec_opportunities_hub"
 
+    jwt_secret: str = "your-secret-key-change-this-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440  # 24 hours
+
     otp_ttl_seconds: int = 600
     otp_min_resend_seconds: int = 60
     otp_max_sends_per_hour: int = 5
@@ -66,6 +70,7 @@ class Settings(BaseSettings):
 
     # Optional Groq (AI-assisted query expansion; does not scrape)
     groq_api_key: str = ""
+    ai_coach_api_key: str = "" # Groq API Key for AI Coach and Advantage
     groq_model: str = ""
     groq_timeout_s: float = 8.0
     groq_max_queries: int = 6

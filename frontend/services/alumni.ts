@@ -19,23 +19,31 @@ export type AlumniPost = {
   createdAt: string;
 };
 
+import { authService } from "./auth";
+
 export const alumniService = {
   listAlumni: async (): Promise<AlumniPublic[]> => {
-    const res = await fetch(`${API_BASE_URL}/alumni/list`);
+    const res = await fetch(`${API_BASE_URL}/alumni/list`, {
+      headers: authService.getAuthHeaders(),
+    });
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.alumni) ? (data.alumni as AlumniPublic[]) : [];
   },
 
   listAllPosts: async (): Promise<AlumniPost[]> => {
-    const res = await fetch(`${API_BASE_URL}/alumni/posts`);
+    const res = await fetch(`${API_BASE_URL}/alumni/posts`, {
+      headers: authService.getAuthHeaders(),
+    });
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.posts) ? (data.posts as AlumniPost[]) : [];
   },
 
   listPostsByAlumni: async (alumniEmail: string): Promise<AlumniPost[]> => {
-    const res = await fetch(`${API_BASE_URL}/alumni/${encodeURIComponent(alumniEmail)}/posts?role=alumni`);
+    const res = await fetch(`${API_BASE_URL}/alumni/${encodeURIComponent(alumniEmail)}/posts?role=alumni`, {
+      headers: authService.getAuthHeaders(),
+    });
     const data = await res.json().catch(() => null);
     if (!data?.success) return [];
     return Array.isArray(data?.posts) ? (data.posts as AlumniPost[]) : [];
@@ -51,7 +59,7 @@ export const alumniService = {
     const cleanedLink = (link ?? "").trim();
     const res = await fetch(`${API_BASE_URL}/alumni/posts`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authService.getAuthHeaders(),
       body: JSON.stringify({
         alumniEmail: user.email,
         role: user.role,

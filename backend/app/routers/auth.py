@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from ..models import SendOtpRequest, VerifyOtpRequest, RegisterRequest, LoginRequest, ApiResponse, AuthUserResponse, UserProfile
+from ..models import (
+    SendOtpRequest, VerifyOtpRequest, RegisterRequest, LoginRequest, 
+    CheckUserRequest, ResetPasswordRequest, ApiResponse, AuthUserResponse, UserProfile
+)
 from ..deps import get_auth_service
 from ..database.db import mongodb_ok
 
@@ -8,6 +11,28 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def _is_allowed_domain(email: str) -> bool:
     domain = email.split("@")[-1].lower()
     return domain in {"kongu.edu", "kongu.ac.in"}
+
+@router.post("/check-user", response_model=ApiResponse)
+async def check_user(payload: CheckUserRequest, auth_service=Depends(get_auth_service)) -> ApiResponse:
+    if not mongodb_ok():
+        return ApiResponse(success=False, message="MongoDB is not connected.")
+    
+    exists = await auth_service.check_user_exists(payload.email, payload.role)
+    if exists:
+        return ApiResponse(success=True, message="User already registered.")
+    else:
+        return ApiResponse(success=False, message="User not found.")
+
+@router.post("/reset-password", response_model=ApiResponse)
+async def reset_password(payload: ResetPasswordRequest, auth_service=Depends(get_auth_service)) -> ApiResponse:
+    if not mongodb_ok():
+        return ApiResponse(success=False, message="MongoDB is not connected.")
+    
+    try:
+        await auth_service.reset_password(payload.email, payload.new_password, payload.role)
+        return ApiResponse(success=True, message="Password reset successful!")
+    except ValueError as e:
+        return ApiResponse(success=False, message=str(e))
 
 @router.post("/send-otp", response_model=ApiResponse)
 async def send_otp(payload: SendOtpRequest, auth_service=Depends(get_auth_service)) -> ApiResponse:
@@ -46,11 +71,12 @@ async def register(payload: RegisterRequest, auth_service=Depends(get_auth_servi
         return AuthUserResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
 
     try:
-        await auth_service.register(payload.name, payload.email, payload.password, payload.department, payload.role)
+        data = await auth_service.register(payload.name, payload.email, payload.password, payload.department, payload.role)
         return AuthUserResponse(
             success=True,
             message="Registration successful!",
-            user=UserProfile(name=payload.name, email=payload.email, department=payload.department, role=payload.role),
+            user=UserProfile(**data["user"]),
+            accessToken=data["accessToken"]
         )
     except ValueError as e:
         return AuthUserResponse(success=False, message=str(e))
@@ -86,7 +112,12 @@ async def login(payload: LoginRequest, auth_service=Depends(get_auth_service)) -
         return AuthUserResponse(success=False, message="MongoDB is not connected. Start MongoDB and retry.")
 
     try:
-        user_doc = await auth_service.login(payload.email, payload.password, payload.role)
-        return AuthUserResponse(success=True, message="Login successful!", user=_to_user_profile(user_doc))
+        data = await auth_service.login(payload.email, payload.password, payload.role)
+        return AuthUserResponse(
+            success=True, 
+            message="Login successful!", 
+            user=_to_user_profile(data["user"]),
+            accessToken=data["accessToken"]
+        )
     except ValueError as e:
         return AuthUserResponse(success=False, message=str(e))

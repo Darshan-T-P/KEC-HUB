@@ -8,6 +8,8 @@ from .scoring import score
 from .types import ExtractedOpportunity, ProfileSignals
 from .utils import is_active, looks_closed, looks_senior
 from .sources.adzuna import AdzunaIndiaSource
+from .sources.remotive import RemotiveSource
+from .sources.rss import RssSource
 from .groq_expander import GroqQueryExpander
 
 
@@ -74,13 +76,15 @@ class OpportunityExtractor:
     def __init__(self) -> None:
         self._groq = GroqQueryExpander.from_settings()
 
-        # Realtime discovery: Adzuna (India) + optional Groq query expansion.
+        # Realtime discovery: Adzuna (India) + Remotive + RSS
         self._adzuna = AdzunaIndiaSource(
             app_id=settings.adzuna_app_id,
             app_key=settings.adzuna_app_key,
             results_per_page=min(50, int(settings.opp_max_results or 25)),
             query_expander=(self._groq.expand if self._groq else None),
         )
+        self._remotive = RemotiveSource()
+        self._rss = RssSource(feed_urls=settings.opp_rss_feed_list())
 
     @property
     def groq_enabled(self) -> bool:
@@ -91,9 +95,24 @@ class OpportunityExtractor:
         return ops
 
     async def extract_with_meta(self, profile: ProfileSignals) -> tuple[list[ExtractedOpportunity], dict]:
-        adzuna_ops = await self._adzuna.fetch(profile)
+        # Fetch from multiple sources in parallel
+        import asyncio
+        tasks = [
+            self._adzuna.fetch(profile),
+            self._remotive.fetch(profile),
+            self._rss.fetch(profile)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        all_ops = []
+        for res in results:
+            if isinstance(res, list):
+                all_ops.extend(res)
+            else:
+                # Log exception if needed
+                print(f"Source fetch error: {res}")
 
-        combined = _dedupe([*adzuna_ops])
+        combined = _dedupe(all_ops)
 
         # Filter closed/expired/old
         filtered: list[ExtractedOpportunity] = []
